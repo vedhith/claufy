@@ -20,6 +20,17 @@
       }
       .now .lbl { font-size: 12.5px; color: #939aa8; }
 
+      .sec { font-size: 15px; margin: 30px 0 4px; }
+      .sub { color: #939aa8; font-size: 12.5px; margin: 0 0 14px; }
+      /* The point of forty is being able to reject thirty-five in one look. */
+      .scan {
+        display: flex; flex-wrap: wrap; gap: 10px;
+        background: #1b1e26; border: 1px solid #2b3038; border-radius: 12px; padding: 14px;
+      }
+      .scan .cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+      .scan .cell span { font: 10px ui-monospace, Menlo, monospace; color: #6f7787; }
+      .scan .cell:hover span { color: #67b5ed; }
+
       .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr)); }
       .card { background: #1b1e26; border: 1px solid #2b3038; border-radius: 14px; padding: 16px; }
       .hd { display: flex; align-items: baseline; gap: 9px; margin-bottom: 13px; }
@@ -84,6 +95,11 @@
       </span>
     </div>
 
+    <h2 class="sec">All of them at once</h2>
+    <p class="sub">Every mark at 28px, the size it lives at. Hover for its number.</p>
+    <div class="scan" id="scan"></div>
+
+    <h2 class="sec">One at a time</h2>
     <div class="grid" id="grid"></div>
 
     <script type="module">
@@ -97,6 +113,13 @@
       // variant 1 of round one is the black-on-white cat currently shipping
       document.getElementById('shipped').innerHTML =
         svgOf(variants[0].art, 32) ;
+
+      document.getElementById('scan').innerHTML = variantsB
+        .map(
+          (v, i) =>
+            `<div class="cell" title="${v.name}">${svgOf(v.art, 28)}<span>${i + 1}</span></div>`,
+        )
+        .join('');
 
       const grid = document.getElementById('grid');
       variantsB.forEach((v, i) => {
