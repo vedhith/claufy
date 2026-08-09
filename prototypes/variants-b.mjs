@@ -1,191 +1,217 @@
-// Round two of the icon prototypes. The first set was reviewed in a toolbar and
-// came back "too big and not uniform" — both of which have the same cause.
+// Round three. Round two was solid silhouettes and got rejected: "these are
+// kind of really bad, they should not be filled in. Do an outline of black,
+// then an empty inside, and then the eye and mouth are also black."
 //
-// TOO BIG: the sprite was 16 cells wide on an 18-cell tile, so the cat covered
-// 89% of the icon and ran almost to the rounded corners. Round two keeps the
-// tile at a fixed 16 cells and shrinks the *cat*, so zoom is one number.
+// So every mark here is LINE ART: a one-cell black outline, the tile showing
+// straight through the middle, and the eye and mouth drawn in the same black.
+// Nothing is filled. Side views included, because the whole set being one
+// front-facing head is what made round two samey.
 //
-// NOT UNIFORM: 18 cells across a 16px icon is 0.888px per cell. No cell edge
-// lands on a pixel boundary, so the renderer rounds each one differently and
-// the "pixels" come out different widths — which is exactly what an uneven
-// pixel icon looks like. A 16-cell tile is 1.00px per cell at 16px, 2.00 at 32,
-// 4.00 at 64, 8.00 at 128. Every mark below is exact at all four.
+// The 16-cell tile from round two stays, and matters more now than it did.
+// A one-cell outline is one device pixel at 16px — but only if the cell grid
+// lands on pixel boundaries. 16 cells does (1.00px per cell at 16px, 2.00 at
+// 32, 4.00 at 64). The old 18-cell tile gave 0.888px per cell, which is what
+// made the first icon look uneven, and a thin outline would show that far
+// worse than a solid shape did.
 //
-// Same rules as round one: flat fill, one ink colour, no strokes, no gradients.
-//   '#' = ink   'o' = knocked back out to the tile   '.' = empty
+//   '#' = ink (outline, eye, mouth)   '.' = empty, tile shows through
+// There is no fill character on purpose. Nothing in this file is solid.
 
 export const TILE = '#ffffff';
 export const INK = '#000000';
-
-// The whole point: 16 divides every icon size that matters.
 export const GRID = 16;
 
-// --- the sprites --------------------------------------------------------
-// Width sets the zoom. 14 is tight, 6 is tiny, and the tile is always 16.
+// Side views come in pairs for free, and a mirrored sprite cannot be drawn
+// wrong in a way the original was not.
+const mirror = (rows) => rows.map((r) => [...r].reverse().join(''));
 
-// 14 wide — closest to the icon that shipped, with a cell of air added.
-const s14 = [
-  '##..........##',
-  '###........###',
-  '##############',
-  '##############',
-  '##############',
-  '###oo####oo###',
-  '###oo####oo###',
-  '##############',
-  '######oo######',
-  '##############',
-  '.############.',
-  '..##########..',
-  '...########...',
-];
+// --- front views --------------------------------------------------------
 
-// 12 wide — the same face with a cell taken off every feature.
-const s12 = [
-  '##........##',
-  '##........##',
-  '############',
-  '############',
-  '##oo####oo##',
-  '##oo####oo##',
-  '############',
-  '#####oo#####',
-  '############',
-  '.##########.',
-  '..########..',
-];
-
-// 12 wide, single-cell eyes and no nose. The least face that is still a face.
-const s12dot = [
-  '##........##',
-  '##........##',
-  '############',
-  '############',
-  '###o####o###',
-  '############',
-  '############',
-  '############',
-  '.##########.',
-  '..########..',
-];
-
-// 12 wide, square ears and a flat jaw. Nothing tapers, so nothing wobbles.
-const s12square = [
-  '##........##',
-  '##........##',
-  '############',
-  '############',
-  '##oo####oo##',
-  '##oo####oo##',
-  '############',
-  '############',
-  '############',
-  '############',
-  '############',
-];
-
-// 12 x 8 — squat. Reads wide in a row of square icons.
-const s12wide = [
+// The straight answer: pointed ears, two eyes, a small mouth.
+const front = [
+  '.#........#.',
+  '.##......##.',
+  '.#.#....#.#.',
+  '##..####..##',
   '#..........#',
-  '##........##',
-  '############',
-  '############',
-  '##oo####oo##',
-  '############',
-  '.##########.',
+  '#.#......#.#',
+  '#..........#',
+  '#....##....#',
+  '#..........#',
+  '.#........#.',
   '..########..',
 ];
 
-const s10 = [
+// Folded/rounded ears — softer, and nothing comes to a single-cell point.
+const frontRound = [
+  '..##....##..',
+  '.#..#..#..#.',
+  '.#...##...#.',
+  '##........##',
+  '#..........#',
+  '#.##....##.#',
+  '#..........#',
+  '#....##....#',
+  '#..........#',
+  '.#........#.',
+  '..########..',
+];
+
+// Wider head, 14 cells across — the most detail this grid will hold.
+const frontWide = [
+  '.#..........#.',
+  '.##........##.',
+  '.#.#......#.#.',
+  '##..######..##',
+  '#............#',
+  '#..##....##..#',
+  '#............#',
+  '#.....##.....#',
+  '#............#',
+  '.#..........#.',
+  '..##########..',
+];
+
+// Smallest front head that still reads. No mouth — just two eyes.
+// The ears keep the head's own outer wall and slope inwards, or at this size
+// they merge into the skull and the whole thing reads as a frog.
+const frontTiny = [
   '#........#',
   '##......##',
-  '##########',
-  '##########',
-  '##o####o##',
-  '##########',
-  '##########',
-  '.########.',
+  '#.#....#.#',
+  '#..####..#',
+  '#........#',
+  '#.#....#.#',
+  '#........#',
+  '.#......#.',
   '..######..',
 ];
 
-// No face at all — shape only, the most Claude-like option in the set.
-const s10solid = [
-  '#........#',
-  '##......##',
-  '##########',
-  '##########',
-  '##########',
-  '##########',
-  '##########',
-  '.########.',
-  '..######..',
+// --- side views ---------------------------------------------------------
+
+// Head in profile. The first attempt read as a wolf: the ears were tall and
+// close together and the snout ran four cells past the jaw. Cat instead means
+// ears set wide apart and a snout barely clear of the face.
+const sideHead = [
+  '#....#......',
+  '##..##......',
+  '#.#.#.#.....',
+  '#...#..###..',
+  '#.........#.',
+  '#..#.......#',
+  '#..........#',
+  '.#.......##.',
+  '.#....####..',
+  '..#####.....',
 ];
 
-// Taller ears, narrower head.
-const s10tall = [
-  '#........#',
-  '#........#',
-  '##......##',
-  '##########',
-  '##########',
-  '##o####o##',
-  '##########',
-  '##########',
-  '##########',
-  '.########.',
-  '..######..',
+// Sitting, seen from the side, with the tail curled round the front paws.
+const sitting = [
+  '.#..#.......',
+  '.##.##......',
+  '.#.#.#......',
+  '#....##.....',
+  '#..#...#....',
+  '#......#....',
+  '.#.....#....',
+  '..#....#....',
+  '..#.....#...',
+  '..#......#..',
+  '.#........#.',
+  '.#.........#',
+  '.#....###..#',
+  '..#####..###',
 ];
 
-// Hollow: ink on the edge, tile showing through, eyes as ink dots. Lightest.
-const s10hollow = [
-  '#........#',
-  '##......##',
-  '##########',
-  '#oooooooo#',
-  '#o#oooo#o#',
-  '#oooooooo#',
-  '#oooooooo#',
-  '.#oooooo#.',
-  '..######..',
+// Walking, side on. Wider than tall, so it fills the tile differently.
+const walking = [
+  '.#..#.........',
+  '.##.##........',
+  '.#.#.#........',
+  '#....#####....',
+  '#..#......###.',
+  '#............#',
+  '.#..........#.',
+  '.#.#..#..#..#.',
+  '..#...#..#..#.',
+  '...#..#..#..#.',
 ];
 
-// Corners knocked off the head block, so the silhouette is softer.
-const s10round = [
-  '#........#',
-  '##......##',
-  '.########.',
-  '##########',
-  '##o####o##',
-  '##########',
-  '.########.',
-  '..######..',
+// Loaf: paws tucked, no legs showing. The squattest shape here.
+const loaf = [
+  '.#..#.........',
+  '.##.##..####..',
+  '.#.#.#.#....#.',
+  '#....##......#',
+  '#..#.........#',
+  '#............#',
+  '.#..........#.',
+  '..##########..',
 ];
 
-const s8 = [
-  '#......#',
-  '########',
-  '########',
-  '#o####o#',
-  '########',
-  '.######.',
-  '..####..',
+// Curled up asleep — a ring, with the tail closing the loop. Closed eye.
+const sleeping = [
+  '....######....',
+  '..##......##..',
+  '.#..........#.',
+  '#....####....#',
+  '#...#....#...#',
+  '#.###.....#..#',
+  '#..........#.#',
+  '.#........#..#',
+  '..##....##...#',
+  '....####...##.',
 ];
 
-// 6 wide — one cell is 2px at 16px. Loudest thing here.
-const s6 = [
-  '#....#',
-  '######',
-  '#o##o#',
-  '######',
-  '.####.',
+// Head and shoulders, turned three-quarters. One ear reads nearer than the
+// other, which is what sells the turn at this size. The outline has to close —
+// the first pass left two stray cells trailing off the bottom-left corner and
+// they read as damage, not as a shoulder.
+const threeQuarter = [
+  '.#.....#....',
+  '.##...##....',
+  '.#.#.#.#....',
+  '##..#...#...',
+  '#........#..',
+  '#.#....#..#.',
+  '#..........#',
+  '#....##....#',
+  '.#........#.',
+  '..########..',
+];
+
+// Just the ears and the eyes — the head outline stops at the cheekbones.
+const peeking = [
+  '.#........#.',
+  '.##......##.',
+  '.#.#....#.#.',
+  '##..####..##',
+  '#..........#',
+  '#.##....##.#',
+  '#..........#',
+  '.##########.',
+];
+
+// Standing, tail up, seen from the side. The most "whole cat" of the set.
+const standing = [
+  '.#..#........#',
+  '.##.##......#.',
+  '.#.#.#......#.',
+  '#....####...#.',
+  '#..#.....##.#.',
+  '#..........##.',
+  '.#...........#',
+  '.#..........#.',
+  '..#.#..#..#.#.',
+  '...#...#..#...',
 ];
 
 // --- rendering ----------------------------------------------------------
 
-// Centred on the 16-cell tile, offsets snapped to whole cells so every edge
-// stays on a pixel boundary. Rounding here rather than allowing a half-cell
-// offset is the difference between crisp and the mush that got rejected.
-function sprite(rows, ink, tile) {
+// Centred on the 16-cell tile with offsets snapped to whole cells. A half-cell
+// offset would put every edge back off the pixel grid, which is precisely the
+// thing this grid exists to avoid.
+function sprite(rows, ink) {
   const cols = rows[0].length;
   const cell = 512 / GRID;
   const offX = Math.round((GRID - cols) / 2);
@@ -193,14 +219,12 @@ function sprite(rows, ink, tile) {
   const out = [];
   for (let y = 0; y < rows.length; y++) {
     for (let x = 0; x < cols; x++) {
-      const ch = rows[y][x];
-      if (ch !== '#' && ch !== 'o') continue;
+      if (rows[y][x] !== '#') continue;
       // +0.5 overdraw closes the hairline seams antialiasing leaves between
       // neighbouring rects at fractional scales.
       out.push(
         `<rect x="${((x + offX) * cell).toFixed(2)}" y="${((y + offY) * cell).toFixed(2)}" ` +
-          `width="${(cell + 0.5).toFixed(2)}" height="${(cell + 0.5).toFixed(2)}" ` +
-          `fill="${ch === '#' ? ink : tile}"/>`,
+          `width="${(cell + 0.5).toFixed(2)}" height="${(cell + 0.5).toFixed(2)}" fill="${ink}"/>`,
       );
     }
   }
@@ -208,24 +232,24 @@ function sprite(rows, ink, tile) {
 }
 
 const tileOf = (bg) => `<rect width="512" height="512" rx="112" fill="${bg}"/>`;
-const make = (rows, { ink = INK, bg = TILE } = {}) => tileOf(bg) + sprite(rows, ink, bg);
+const make = (rows, { ink = INK, bg = TILE } = {}) => tileOf(bg) + sprite(rows, ink);
 
-// Percentage of the tile the cat covers — the "too big" number, made visible.
+// Percentage of the tile the drawing spans — the "too big" number, made visible.
 const cover = (rows) => Math.round((rows[0].length / GRID) * 100);
 
 export const variantsB = [
-  { name: 'Fourteen', rows: s14, note: 'Closest to the icon that shipped, with a cell of air added all round.' },
-  { name: 'Twelve', rows: s12, note: 'The same face, one cell off every feature. The safe pick.' },
-  { name: 'Twelve, dot eyes', rows: s12dot, note: 'Single-cell eyes, no nose. The least face that is still a face.' },
-  { name: 'Twelve, square', rows: s12square, note: 'Square ears, flat jaw. Nothing tapers, so nothing wobbles small.' },
-  { name: 'Twelve, wide', rows: s12wide, note: 'Squat. Reads wide in a row of square icons.' },
-  { name: 'Ten', rows: s10, note: 'Half the tile is air. This is what "zoomed out" looks like.' },
-  { name: 'Ten, solid', rows: s10solid, note: 'No face at all — shape only. The most Claude-like of the set.' },
-  { name: 'Ten, tall ears', rows: s10tall, note: 'Longer ears, narrower head. More cat, less bear.' },
-  { name: 'Ten, hollow', rows: s10hollow, note: 'Ink on the edge, tile showing through. Lightest weight here.' },
-  { name: 'Ten, rounded', rows: s10round, note: 'Corners knocked off the head, so the silhouette softens.' },
-  { name: 'Eight', rows: s8, note: 'Two pixels per cell at 16px. Very few cells, very hard to blur.' },
-  { name: 'Six', rows: s6, note: 'The loudest thing here. Almost a logo mark rather than a cat.' },
+  { name: 'Front', rows: front, note: 'Pointed ears, two eyes, small mouth. The straight answer in line art.' },
+  { name: 'Front, round ears', rows: frontRound, note: 'Folded ears — nothing comes to a single-cell point, so nothing frays small.' },
+  { name: 'Front, wide', rows: frontWide, note: '14 cells across: the most detail this grid will hold.' },
+  { name: 'Front, tiny', rows: frontTiny, note: 'No mouth, just eyes. Smallest front head that still reads.' },
+  { name: 'Side head →', rows: sideHead, note: 'Profile: sloping forehead, snout, jaw. One eye.' },
+  { name: 'Side head ←', rows: mirror(sideHead), note: 'The same profile mirrored, in case it sits better facing left.' },
+  { name: 'Sitting', rows: sitting, note: 'Side on, tail curled round the front paws. Tallest mark here.' },
+  { name: 'Walking', rows: walking, note: 'Side on, four legs. Wider than tall, so it fills the tile differently.' },
+  { name: 'Loaf', rows: loaf, note: 'Paws tucked, no legs. The squattest shape in the set.' },
+  { name: 'Sleeping', rows: sleeping, note: 'Curled into a ring, tail closing the loop, eye shut.' },
+  { name: 'Three-quarter', rows: threeQuarter, note: 'Head and shoulders, turned. One ear reads nearer than the other.' },
+  { name: 'Standing', rows: standing, note: 'Tail up, side on. The most whole-cat option here.' },
 ].map((v) => ({ ...v, art: make(v.rows), cover: cover(v.rows) }));
 
-export { make, sprite, cover };
+export { make, sprite, cover, mirror };

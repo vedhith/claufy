@@ -61,21 +61,26 @@
     </style>
   </head>
   <body>
-    <h1>Claufy icons — round two</h1>
+    <h1>Claufy icons — round three, all line art</h1>
     <p class="lede">
-      Two complaints, one cause. <b>Too big:</b> the shipped cat is 16 cells wide on an 18-cell
-      tile — 89% coverage, running right into the rounded corners. <b>Not uniform:</b> 18 cells
-      across a 16px icon is 0.888px per cell, so no cell edge lands on a pixel and the renderer
-      makes each one a slightly different width. Everything below sits on a
-      <b>16-cell tile</b> — exactly 1px per cell at 16px, 2px at 32, 4px at 64 — and the cat is
-      shrunk instead of the tile grown, so <b>coverage is the zoom dial</b>.
+      Everything from before is gone. These are <b>outlines</b>: a one-cell black edge, the tile
+      showing straight through the middle, and the eye and mouth in the same black.
+      <b>Nothing is filled.</b> Half the set is a side view — sitting, walking, loafing, asleep —
+      because twelve versions of one front-facing head is what made the last round samey.
+      <br /><br />
+      They all sit on a <b>16-cell tile</b>, which is why the thin lines survive: 16 cells is
+      exactly 1px per cell at 16px, 2px at 32, 4px at 64. The icon that shipped used an 18-cell
+      tile — 0.888px per cell — so no edge landed on a pixel and every "pixel" came out a
+      different width. That is what looked uneven in the toolbar, and a one-cell outline would
+      show it far worse than a solid shape did.
+      <br /><br />
       Judge them in the toolbar strip, not at 128. Tell me a number.
     </p>
 
     <div class="now">
       <span id="shipped"></span>
       <span class="lbl">
-        ← what is shipped today (18-cell tile, 89% coverage) — the one that looked wrong in the toolbar
+        ← what is shipped today: solid, 18-cell tile, 89% coverage — the one that looked wrong in the toolbar
       </span>
     </div>
 
