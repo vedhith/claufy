@@ -267,11 +267,14 @@ function slide(el: HTMLElement, from: DOMRect) {
   anim.finished.then(done, done);
 }
 
-function swapWithStage(p: Pane, animate: boolean) {
+// A tile that opens goes straight to slot 0 in makePane rather than through
+// here, so this is only ever a click, a key, or the smoke test — and always
+// animates unless the machine has asked it not to.
+function swapWithStage(p: Pane) {
   const st = panes.find((x) => x.slot === 0);
   if (!st || st === p) return;
 
-  const moving = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const moving = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Measured live, so a click during a swap flies on from where the tile
   // actually is rather than snapping back first.
   const from = moving ? [st.el.getBoundingClientRect(), p.el.getBoundingClientRect()] : null;
@@ -330,13 +333,11 @@ function layout() {
   }
 }
 
-// `animate` is off for tiles that appear or disappear: the grid tracks are
-// already moving underneath them, so a flight measured against them lands wrong.
-function setActive(id: string, animate = true) {
+function setActive(id: string) {
   const p = panes.find((x) => x.id === id);
   if (!p) return;
   if (settings.mode === 'stage' && p.slot !== 0) {
-    swapWithStage(p, animate);
+    swapWithStage(p);
     return;
   }
   if (activeId === id) return;
@@ -671,6 +672,24 @@ function paneText(p: Pane): string {
     rail: wasRail,
   };
 
+  // Closing the middle tile is the path that can strand the layout: the slots
+  // have to close ranks and something has to inherit the centre.
+  closePane(panes.find((p) => p.slot === 0)!.id);
+  await settle();
+  const dense = (n: number) =>
+    panes.map((p) => p.slot).sort((a, b) => a - b).join(',') === [...Array(n).keys()].join(',');
+  const stageAfterClose = {
+    slotsDense: dense(panes.length),
+    centreIsActive: panes.find((p) => p.slot === 0)?.id === activeId,
+    stillVisible: panes.every((p) => p.el.getBoundingClientRect().width > 0),
+  };
+  await addTerminal();
+  await settle();
+  const stageAfterOpen = {
+    newTileTookCentre: panes[panes.length - 1].slot === 0,
+    slotsDense: dense(panes.length),
+  };
+
   settings.mode = 'grow';
   layout();
 
@@ -706,6 +725,8 @@ function paneText(p: Pane): string {
     shape,
     templates: seen,
     stageSwap,
+    stageAfterClose,
+    stageAfterOpen,
     shellsProducedOutput: gotData.size,
     spawnErrors,
     dead: panes.filter((p) => p.dead).length,
