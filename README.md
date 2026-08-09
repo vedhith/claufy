@@ -20,7 +20,7 @@
 | **macOS** (Apple Silicon) | [`Claufy-mac-arm64.dmg`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-mac-arm64.dmg) |
 | **macOS** (Intel) | [`Claufy-mac-x64.dmg`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-mac-x64.dmg) |
 | **Windows** | [`Claufy-win-x64.exe`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-win-x64.exe) |
-| **Linux** | [`Claufy-linux-x64.AppImage`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-linux-x64.AppImage) |
+| **Linux** | [`Claufy-linux-x86_64.AppImage`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-linux-x86_64.AppImage) |
 
 The builds are **not code-signed** — a signing certificate costs money and this
 is free. Every OS therefore puts up a scare the first time:
@@ -28,7 +28,7 @@ is free. Every OS therefore puts up a scare the first time:
 - **macOS** — right-click the app and choose *Open*, then *Open* again. Or
   `xattr -dr com.apple.quarantine /Applications/Claufy.app`.
 - **Windows** — SmartScreen: *More info* → *Run anyway*.
-- **Linux** — `chmod +x Claufy-linux-x64.AppImage`, then run it.
+- **Linux** — `chmod +x Claufy-linux-x86_64.AppImage`, then run it.
 
 Building from source skips all of that, and is two commands (see below).
 

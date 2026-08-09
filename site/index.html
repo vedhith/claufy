@@ -710,7 +710,10 @@
       const RELEASES = {
         mac: DL + 'Claufy-mac-arm64.dmg',
         win: DL + 'Claufy-win-x64.exe',
-        linux: DL + 'Claufy-linux-x64.AppImage',
+        // AppImage names itself by the kernel's arch string, so electron-builder
+        // writes x86_64 here where the others say x64. Verified, not assumed:
+        // `npm run check-links` fetches every one of these.
+        linux: DL + 'Claufy-linux-x86_64.AppImage',
       };
       const NAMES = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
 
@@ -725,7 +728,7 @@
           `SmartScreen will warn on an unsigned app the first time — ` +
           `<strong>More info → Run anyway</strong>.`,
         linux:
-          `An AppImage: <code>chmod +x Claufy-linux-x64.AppImage</code> and run it. ` +
+          `An AppImage: <code>chmod +x Claufy-linux-x86_64.AppImage</code> and run it. ` +
           `No install, no root.`,
       };
 

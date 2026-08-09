@@ -22,7 +22,8 @@
     "dist": "npm run build && npm run icons && electron-builder --dir",
     "dist:release": "npm run build && npm run icons && electron-builder",
     "install-app": "node scripts/install-app.mjs",
-    "site": "node scripts/serve.mjs"
+    "site": "node scripts/serve.mjs",
+    "check-links": "node scripts/check-links.mjs"
   },
   "build": {
     "appId": "dev.vedhith.claufy",
