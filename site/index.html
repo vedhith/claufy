@@ -654,6 +654,10 @@
       }
 
       function layout() {
+        // Any layout that is not a swap invalidates every flight in progress —
+        // switching mode mid-swap would otherwise leave a tile flying to a slot
+        // that no longer exists. A swap re-arms its own two straight after.
+        for (const el of grid.children) stopFlight(el);
         if (mode === 'stage') { layoutStage(); marks(); return; }
         grid.classList.remove('stage');
         [...grid.children].forEach((el) => {
@@ -686,6 +690,14 @@
       const flights = new WeakMap();
       const still = matchMedia('(prefers-reduced-motion: reduce)');
 
+      function stopFlight(el) {
+        const a = flights.get(el);
+        // Delete first: cancel() rejects the finished promise, and the handler
+        // there only tidies up if it is still the current flight.
+        if (a) { flights.delete(el); a.cancel(); }
+        el.style.zIndex = '';
+      }
+
       // Carry a tile from where it was to where it now is. Width and height
       // animate and a plain translate moves it — nothing is ever scaled, which
       // is exactly what the app does, and why its terminals never blur.
@@ -717,12 +729,6 @@
         // Measured live, so clicking mid-swap flies on from where the tile
         // actually is instead of snapping back first.
         const from = fly ? [a.getBoundingClientRect(), b.getBoundingClientRect()] : null;
-        if (fly) {
-          for (const el of [a, b]) {
-            const f = flights.get(el);
-            if (f) { f.cancel(); flights.delete(el); }
-          }
-        }
         slots[c] = slots[i];
         slots[i] = 0;
         active = i;

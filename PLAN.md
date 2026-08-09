@@ -53,6 +53,16 @@ and reveals the content, and a plain translate carries it across, so the text is
 sharp on every frame. Grid items take an animated width without disturbing the
 tracks, because the tracks are `fr` and `clamp()`, never `auto`.
 
+**A rail tile gets a click sheet over it, because a `<webview>` eats clicks.**
+Pointer events inside a webview never reach the embedder, so a *page* tile on a
+rail could only be promoted by its header — and "click the small one" has to
+mean clicking the thing, not its title bar. A transparent sheet over the body,
+shown only on a rail, takes the click instead. It has to carry a `z-index`: it
+is created before the terminal host or the webview, so paint order alone would
+bury it. On the middle tile there is no sheet, so a page there is fully
+interactive. This also makes the rule uniform — on a rail, a click promotes,
+whatever the tile happens to be.
+
 **Rails alternate right, left, right, left.** Filling one rail first would slide
 the middle tile sideways every time the count changed. Alternating keeps it
 centred from three tiles up; two tiles hang a single rail off the right, which is

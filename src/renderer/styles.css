@@ -167,6 +167,20 @@ input[type="range"] { width: 92px; accent-color: var(--accent); }
 #grid.stage .pane.rail:hover { border-color: var(--ansi-brblack); }
 #grid.stage .pane.rail .pane-head { color: var(--ink-dim); }
 
+/* The click sheet. A <webview> eats pointer events before the embedder sees
+   them, so without this a page tile on a rail could only be promoted by its
+   header. It needs a z-index: it is the FIRST child of the body, and the
+   terminal host or webview is appended after it, so paint order alone would
+   put it underneath. Only on a rail — the middle tile stays interactive. */
+.pane-catch { display: none; }
+#grid.stage .pane.rail .pane-catch {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  cursor: pointer;
+}
+
 /* A rail tile is ~130px wide, so eight of them put eight ✕ on screen at the
    edge of your vision. It fades out until you are actually pointing at one;
    the space stays reserved either way, so nothing shifts on hover. */

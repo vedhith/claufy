@@ -49,7 +49,7 @@ branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 JSON, exits. Last good run:
 
 ```
-shells : 4 / 4      spawn errors: none      dead: 0
+shells : 5 / 5      spawn errors: none      dead: 0
 font   : True "JetBrainsMono NFP Thin"    bg: rgb(25, 29, 39)
 equal  : 1fr 1fr        grow: 1fr 2.2fr       solo: 0fr 1fr
 stage  : clamp(128px, 17%, 240px) 1fr clamp(128px, 17%, 240px) / repeat(2, 1fr)
@@ -59,14 +59,22 @@ stage swap, 4 tiles, clicking the first rail tile:
   centreTookRail  true    <- and the centre landed on exactly the rail's
   restStayedPut   true    <- every other tile ended where it started
   railsStayVisible true   <- no tile collapsed to zero; the shells stay readable
+close the middle tile, then open a new one:
+  slotsDense true   centreIsActive true   stillVisible true
+  newTileTookCentre true   slotsDense true
+a page tile pushed onto a rail (a <webview> eats clicks before the app sees them):
+  onARail true
+  topmostIsTheClickSheet true   <- so clicking the page promotes it
+  middleHasNoSheet true         <- and a page in the middle stays interactive
 scope probe inside a tile on "git pop":
   DIR=/Users/vedhith/Developer/git pop
   WRAPPED=2               <- claude agents is wrapped with --cwd
   ISFUNC=claude: function
 ```
 
-The scope probe needs `CLAUFY_PROBE_DIR`; the run above without it reports
-`scopeProbe: null` and four panes rather than five.
+The scope probe needs `CLAUFY_PROBE_DIR`; without it the run reports
+`scopeProbe: null` and the five panes above are four terminals plus the page
+tile the click-sheet check opens, not a probe tile.
 
 Add `CLAUFY_PROBE_DIR="/some/folder"` to run the scope probe.
 
@@ -343,7 +351,23 @@ them will be overwritten.
    are auto-flow and inherit the stale placement if it is not cleared. `layout()`
    wipes both on every non-Stage pass — that is not tidiness, it is the fix.
 
-9. **A swap animates width/height, and that only works because no track is
+9. **`CLAUFY_SMOKE` hangs forever if the Mac's display has gone to sleep.**
+   `addTerminal` waits on `requestAnimationFrame` before its first `fit()`, and
+   macOS stops compositing an occluded or asleep display, so no frame ever
+   arrives. The symptom is the worst kind: **zero output**, no error, no exit —
+   which reads exactly like a bug in whatever you just changed. It cost a
+   bisect. Run it with the frame throttles off:
+
+   ```bash
+   CLAUFY_SMOKE=1 npx electron --disable-backgrounding-occluded-windows \
+     --disable-renderer-backgrounding --disable-background-timer-throttling .
+   ```
+
+   Check before blaming your diff: `pmset -g assertions | grep DisplaySleep`.
+   The control is to run the *previous commit* the same way — if that hangs too,
+   it is the screen, not the code.
+
+10. **A swap animates width/height, and that only works because no track is
    `auto`.** A grid item with an animated width would otherwise resize its own
    track and drag the whole layout with it. The tracks are `fr` and `clamp()`, so
    the item is free to be any width inside its cell. The same rule is what keeps

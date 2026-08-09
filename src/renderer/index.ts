@@ -238,7 +238,19 @@ const flights = new WeakMap<HTMLElement, Animation>();
 
 function stopFlight(el: HTMLElement) {
   const a = flights.get(el);
-  if (a) { a.cancel(); flights.delete(el); }
+  // Delete before cancelling: cancel() rejects the finished promise, and the
+  // handler there only tidies up if it is still the current flight.
+  if (a) { flights.delete(el); a.cancel(); }
+  el.style.zIndex = '';
+}
+
+// Any layout that is not a swap invalidates every flight in progress — the
+// target slot it was flying to may not even exist any more. Closing a tile,
+// entering Solo and changing mode all land here, so cancelling once in
+// `layout()` covers all of them. A cancelled tile snaps to where it belongs,
+// which is always better than arriving somewhere that has moved.
+function stopAllFlights() {
+  for (const p of panes) stopFlight(p.el);
 }
 
 // Carry a tile from where it was to where it now is. Width and height animate
@@ -275,10 +287,9 @@ function swapWithStage(p: Pane) {
   if (!st || st === p) return;
 
   const moving = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // Measured live, so a click during a swap flies on from where the tile
-  // actually is rather than snapping back first.
+  // Measured live and before `layout()` cancels the flights, so a click during
+  // a swap carries on from where the tile actually is rather than snapping back.
   const from = moving ? [st.el.getBoundingClientRect(), p.el.getBoundingClientRect()] : null;
-  if (moving) { stopFlight(st.el); stopFlight(p.el); }
 
   const s = st.slot;
   st.slot = p.slot;
@@ -297,6 +308,9 @@ function swapWithStage(p: Pane) {
 
 function layout() {
   const n = panes.length;
+  // A swap cancels these itself and then re-arms them after this returns, so
+  // this only ever kills a flight the new layout has already invalidated.
+  stopAllFlights();
   empty.classList.toggle('show', n === 0);
   grid.classList.toggle('stage', settings.mode === 'stage');
   if (n === 0) {
@@ -376,6 +390,15 @@ function makePane(kind: Pane['kind'], title: string): Pane {
 
   const body = document.createElement('div');
   body.className = 'pane-body';
+
+  // Pointer events inside a <webview> never reach the embedder, so a page tile
+  // on a rail could not be clicked into the middle — only its header worked,
+  // which is not what "click the small one" means. This sheet sits over the
+  // body and takes the click instead. CSS shows it only on a Stage rail, so a
+  // page in the middle is fully interactive.
+  const catcher = document.createElement('div');
+  catcher.className = 'pane-catch';
+  body.append(catcher);
 
   el.append(head, body);
 
@@ -690,8 +713,33 @@ function paneText(p: Pane): string {
     slotsDense: dense(panes.length),
   };
 
+  // A page tile pushed onto a rail. A <webview> takes pointer events before the
+  // embedder sees them, so the only proof that clicking one promotes it is that
+  // the topmost thing at its centre is the click sheet, not the webview.
+  // 127.0.0.1:1 refuses instantly and needs no network — the element is what
+  // matters here, not what it managed to load.
+  addPage('https://127.0.0.1:1');
+  await settle();
+  setActive(panes.find((p) => p.slot === 1)!.id);
+  await new Promise((r) => setTimeout(r, SWAP_MS + 200));
+  const pagePane = panes.find((p) => p.kind === 'page');
+  const pr = pagePane?.body.getBoundingClientRect();
+  const overPage = pr ? document.elementFromPoint(pr.left + pr.width / 2, pr.top + pr.height / 2) : null;
+  const railPage = {
+    onARail: (pagePane?.slot ?? 0) > 0,
+    topmostIsTheClickSheet: overPage?.classList.contains('pane-catch') ?? false,
+    // and the middle tile keeps its page interactive: no sheet over slot 0
+    middleHasNoSheet:
+      getComputedStyle(panes.find((p) => p.slot === 0)!.body.querySelector('.pane-catch')!).display === 'none',
+  };
+
   settings.mode = 'grow';
   layout();
+  // Stage and Grow can have the same number of columns, and then the browser
+  // interpolates between the two templates instead of jumping. Measuring
+  // without waiting reads a frame mid-transition and calls the active tile
+  // smaller than it ends up.
+  await settle();
 
   const sized = panes.map((p) => {
     const r = p.el.getBoundingClientRect();
@@ -727,6 +775,7 @@ function paneText(p: Pane): string {
     stageSwap,
     stageAfterClose,
     stageAfterOpen,
+    railPage,
     shellsProducedOutput: gotData.size,
     spawnErrors,
     dead: panes.filter((p) => p.dead).length,
