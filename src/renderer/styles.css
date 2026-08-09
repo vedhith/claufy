@@ -1,19 +1,38 @@
-/* Claufy — the grid does the work. Sizes live in grid-template-*, which
-   Chromium interpolates, so growing a tile is one animated property change
-   rather than per-tile transforms that would blur terminal text. */
+/* Claufy — palette and type lifted from the user's Terminal.app "Clear Dark"
+   profile so a tile looks like the terminal it replaces. Every value below
+   comes from that profile or is mixed from two of its colours; nothing is
+   invented.
+
+   The grid does the work: sizes live in grid-template-*, which Chromium
+   interpolates, so growing a tile is one animated property rather than a
+   transform that would resample and blur terminal glyphs. */
 
 :root {
-  --bg: #14121a;
-  --bar: #1b1824;
-  --tile: #1d1a27;
-  --tile-active: #241f33;
-  --line: #2e2940;
-  --line-active: #7c5cff;
-  --ink: #e9e6f5;
-  --ink-dim: #9a93b5;
-  --accent: #7c5cff;
-  --cat: #ffb3c7;
-  --cat-ink: #2a2135;
+  /* straight from Clear Dark */
+  --bg: #191d27;          /* BackgroundColor */
+  --ink: #e0e0e0;         /* TextColor */
+  --ink-bold: #ededed;    /* TextBoldColor */
+  --sel: #273d4c;         /* SelectionColor */
+  --accent: #67b5ed;      /* ANSIBrightBlue */
+  --ansi-black: #35424c;
+  --ansi-brblack: #465c6d;
+
+  /* mixed from the above so the chrome sits either side of the terminal bg */
+  --bar: #141821;
+  --tile: #191d27;
+  --tile-active: #1e2531;
+  --line: #2a3441;
+  --line-active: #67b5ed;
+  --ink-dim: #7d8b99;
+  --btn: #202836;
+  --btn-hover: #29323f;
+
+  --cat: #ffffff;
+  --cat-ink: #000000;
+
+  --mono: "JetBrainsMono NFP Thin", "JetBrainsMono Nerd Font Propo",
+          "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --speed: 380ms;
   --gap: 8px;
@@ -27,7 +46,8 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  /* Same face as the terminal, so chrome and content read as one surface. */
+  font: 12px/1.45 var(--mono);
 }
 
 body { display: flex; flex-direction: column; }
@@ -39,11 +59,9 @@ body { display: flex; flex-direction: column; }
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   background: var(--bar);
   border-bottom: 1px solid var(--line);
-  /* Leaves room for the macOS traffic lights under hiddenInset. */
-  padding-left: env(titlebar-area-x, 12px);
   -webkit-app-region: drag;
 }
 
@@ -51,21 +69,19 @@ body { display: flex; flex-direction: column; }
 
 .brand { display: flex; align-items: center; gap: 8px; }
 
-.wordmark { font-weight: 650; letter-spacing: 0.2px; }
+.wordmark { font-weight: 400; letter-spacing: 0.4px; color: var(--ink); }
 
-.cat { width: 24px; height: 24px; }
-.cat.big { width: 84px; height: 84px; opacity: 0.85; }
-.cat-head { fill: var(--cat); }
-.cat-ear { fill: var(--cat); }
-.cat-eye { fill: var(--cat-ink); }
-.cat-nose { fill: var(--cat-ink); }
-.cat-mouth, .cat-whisker {
+.cat { width: 22px; height: 22px; }
+.cat.big { width: 76px; height: 76px; opacity: 0.9; }
+
+/* White mass, black line — has to survive at 22px in the bar. */
+.cat-head, .cat-ear {
+  fill: var(--cat);
   stroke: var(--cat-ink);
-  stroke-width: 1.4;
-  fill: none;
-  stroke-linecap: round;
+  stroke-width: 2.6;
+  stroke-linejoin: round;
 }
-.cat-whisker { opacity: 0.55; }
+.cat-eye, .cat-nose { fill: var(--cat-ink); }
 
 .actions {
   display: flex;
@@ -80,35 +96,34 @@ body { display: flex; flex-direction: column; }
 button {
   font: inherit;
   color: var(--ink);
-  background: #262135;
+  background: var(--btn);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 5px 10px;
+  border-radius: 6px;
+  padding: 4px 9px;
   cursor: pointer;
   transition: background 140ms var(--ease), border-color 140ms var(--ease);
 }
-button:hover { background: #2f2946; border-color: #443c63; }
+button:hover { background: var(--btn-hover); border-color: var(--ansi-brblack); }
 button:active { transform: translateY(1px); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #0f1620; }
 
 label.mode, label.size {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--ink-dim);
-  font-size: 12px;
 }
 
 select {
   font: inherit;
   color: var(--ink);
-  background: #262135;
+  background: var(--btn);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 4px 6px;
+  border-radius: 6px;
+  padding: 3px 6px;
 }
 
-input[type="range"] { width: 96px; accent-color: var(--accent); }
+input[type="range"] { width: 92px; accent-color: var(--accent); }
 
 /* --- the grid --------------------------------------------------------- */
 
@@ -127,20 +142,20 @@ input[type="range"] { width: 96px; accent-color: var(--accent); }
   position: relative;
   display: flex;
   flex-direction: column;
-  /* Without these the tracks refuse to shrink and Solo mode cannot collapse. */
+  /* Without these the tracks refuse to shrink and Solo cannot collapse. */
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--tile);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   transition: background 200ms var(--ease), border-color 200ms var(--ease), opacity 200ms var(--ease);
 }
 
 .pane.active {
   background: var(--tile-active);
   border-color: var(--line-active);
-  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.35), 0 12px 34px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
 }
 
 /* A collapsed track still paints a sliver; fading it stops the flicker. */
@@ -151,8 +166,7 @@ input[type="range"] { width: 96px; accent-color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 5px 8px;
   color: var(--ink-dim);
   border-bottom: 1px solid var(--line);
   cursor: pointer;
@@ -166,20 +180,20 @@ input[type="range"] { width: 96px; accent-color: var(--accent); }
   text-overflow: ellipsis;
 }
 
-.pane.active .pane-title { color: var(--ink); }
+.pane.active .pane-title { color: var(--ink-bold); }
 
 .dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #3f3857; flex: 0 0 auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ansi-black); flex: 0 0 auto;
 }
 .pane.active .dot { background: var(--accent); }
-.pane.dead .dot { background: #6b4b4b; }
+.pane.dead .dot { background: #b45648; } /* ANSIRedColor */
 
 .pane-close {
   border: 0; background: transparent; color: var(--ink-dim);
-  padding: 2px 6px; border-radius: 6px; line-height: 1;
+  padding: 1px 6px; border-radius: 5px; line-height: 1;
 }
-.pane-close:hover { background: #3a3352; color: var(--ink); }
+.pane-close:hover { background: var(--btn-hover); color: var(--ink); }
 
 .pane-body { flex: 1 1 auto; min-height: 0; position: relative; }
 
@@ -189,9 +203,8 @@ webview { position: absolute; inset: 0; width: 100%; height: 100%; background: #
 
 .pane-error {
   padding: 14px;
-  color: #ffb4b4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  color: #df6c5a; /* ANSIBrightRedColor */
+  font-family: var(--mono);
   white-space: pre-wrap;
 }
 
@@ -199,7 +212,7 @@ webview { position: absolute; inset: 0; width: 100%; height: 100%; background: #
 
 #empty {
   position: absolute;
-  inset: 46px 0 0 0;
+  inset: 44px 0 0 0;
   display: none;
   flex-direction: column;
   align-items: center;
@@ -209,15 +222,15 @@ webview { position: absolute; inset: 0; width: 100%; height: 100%; background: #
   color: var(--ink-dim);
 }
 #empty.show { display: flex; }
-#empty .lead { color: var(--ink); font-size: 15px; margin: 6px 0 0; }
+#empty .lead { color: var(--ink); font-size: 14px; margin: 8px 0 0; }
 #empty .hint { margin: 0; }
 
 kbd {
   font: inherit;
-  background: #262135;
+  background: var(--btn);
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 1px 5px;
 }
 
@@ -225,24 +238,26 @@ kbd {
 
 dialog {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--bar);
   color: var(--ink);
   padding: 18px;
   width: min(460px, 90vw);
+  font: inherit;
 }
-dialog::backdrop { background: rgba(6, 5, 10, 0.55); }
-dialog h2 { margin: 0 0 12px; font-size: 15px; }
+dialog::backdrop { background: rgba(10, 13, 18, 0.6); }
+dialog h2 { margin: 0 0 12px; font-size: 13px; font-weight: 400; color: var(--ink-bold); }
 dialog input[type="text"] {
   width: 100%;
   font: inherit;
   color: var(--ink);
-  background: #201c2e;
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 8px 10px;
 }
-dialog .note { color: var(--ink-dim); font-size: 12px; line-height: 1.5; }
+dialog input[type="text"]::selection { background: var(--sel); }
+dialog .note { color: var(--ink-dim); line-height: 1.6; }
 dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 14px 0 0; }
 
 #toast {
@@ -250,18 +265,19 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; ma
   left: 50%;
   bottom: 22px;
   transform: translate(-50%, 14px);
-  background: #2a2440;
+  background: var(--btn);
   border: 1px solid var(--line);
   color: var(--ink);
-  padding: 9px 14px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 200ms var(--ease), transform 200ms var(--ease);
   max-width: 70vw;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+::selection { background: var(--sel); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 1ms !important; }

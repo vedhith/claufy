@@ -60,6 +60,35 @@ const modKeyLabel = isMac ? 'Cmd' : 'Ctrl';
 const newkey = document.getElementById('newkey');
 if (newkey) newkey.textContent = modKeyLabel;
 
+// --- theme --------------------------------------------------------------
+
+// Read out of ~/Library/Preferences/com.apple.Terminal.plist, profile
+// "Clear Dark". Kept as literals rather than read at runtime so the app looks
+// the same on a machine that has no Terminal.app.
+const TERM_THEME = {
+  background: '#191d27',
+  foreground: '#e0e0e0',
+  cursor: '#e0e0e0',
+  cursorAccent: '#191d27',
+  selectionBackground: '#273d4c',
+  black: '#35424c',
+  red: '#b45648',
+  green: '#6caa71',
+  yellow: '#c4ac62',
+  blue: '#6d96b4',
+  magenta: '#bd7bcd',
+  cyan: '#7ccbcd',
+  white: '#dee5eb',
+  brightBlack: '#465c6d',
+  brightRed: '#df6c5a',
+  brightGreen: '#79be7e',
+  brightYellow: '#e5c872',
+  brightBlue: '#67b5ed',
+  brightMagenta: '#d389e5',
+  brightCyan: '#84dde0',
+  brightWhite: '#e5eff5',
+} as const;
+
 // --- settings -----------------------------------------------------------
 
 type Settings = { mode: Mode; ratio: number };
@@ -244,16 +273,13 @@ async function addTerminal(cwd?: string, command?: string) {
   pane.body.append(host);
 
   const term = new Terminal({
-    fontSize: 12.5,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    // Font, size and the whole palette are the user's Terminal.app "Clear Dark"
+    // profile, so a tile is indistinguishable from the window it replaces.
+    fontSize: 12,
+    fontFamily: '"JetBrainsMono NFP Thin", "JetBrainsMono Nerd Font Propo", "JetBrains Mono", ui-monospace, Menlo, monospace',
     cursorBlink: true,
     allowProposedApi: true,
-    theme: {
-      background: '#1d1a27',
-      foreground: '#e9e6f5',
-      cursor: '#7c5cff',
-      selectionBackground: '#3a3160',
-    },
+    theme: TERM_THEME,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
@@ -436,7 +462,11 @@ window.addEventListener('resize', () => {
     return { id: p.id, w: Math.round(r.width), h: Math.round(r.height) };
   });
 
+  const fontFamily = '"JetBrainsMono NFP Thin"';
   return {
+    fontLoaded: document.fonts.check(`12px ${fontFamily}`),
+    bodyFont: getComputedStyle(document.body).fontFamily.split(',')[0],
+    bg: getComputedStyle(document.body).backgroundColor,
     ptyOk,
     ptyErr,
     panes: panes.length,

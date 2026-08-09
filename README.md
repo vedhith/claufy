@@ -21,6 +21,27 @@ npm install     # also repairs node-pty's spawn-helper permissions
 npm start
 ```
 
+## Install it (macOS)
+
+```bash
+npm run dist         # builds Claufy.app
+npm run install-app  # copies to ~/Applications, ad-hoc signs, tells Spotlight
+```
+
+Then type **claufy** in Spotlight or Finder. Use `npm run install-app -- --system`
+for `/Applications` instead (needs an admin password).
+
+## How it looks
+
+The palette, the font and the whole ANSI table are read out of Terminal.app's
+**Clear Dark** profile, so a tile looks like the terminal window it replaces:
+background `#191d27`, text `#e0e0e0`, selection `#273d4c`, JetBrainsMono NFP
+Thin at 12pt. To retarget it at a different profile, decode
+`~/Library/Preferences/com.apple.Terminal.plist` — the colours are
+`NSKeyedArchiver` blobs whose `NSRGB` field is a null-terminated string of
+floats — and replace `TERM_THEME` in `src/renderer/index.ts` plus the tokens at
+the top of `src/renderer/styles.css`.
+
 ## Keys
 
 | Key | Does |

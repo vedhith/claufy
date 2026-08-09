@@ -52,7 +52,7 @@ function createWindow() {
     height: 900,
     minWidth: 640,
     minHeight: 420,
-    backgroundColor: '#14121a',
+    backgroundColor: '#191d27', // Clear Dark BackgroundColor
     title: 'Claufy',
     icon,
     // Keep the traffic lights but drop the title bar: the tiles are the UI.

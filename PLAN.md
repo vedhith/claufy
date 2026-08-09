@@ -46,6 +46,24 @@ from node-pty's prebuild. The only symptom is `posix_spawnp failed.`, which
 names neither file nor cause. Cost an hour; the repair script exists so it
 never costs another.
 
+**The theme is Terminal.app's, copied exactly.** Not "a dark theme that feels
+similar" — the actual values from the user's Clear Dark profile, including all
+sixteen ANSI colours and the font. A tile that is one shade off from the window
+it replaces looks broken in a way a wholly different theme would not.
+They are baked in as literals rather than read at launch, so the app looks the
+same on a machine with no Terminal.app and does not need to parse a plist to
+draw its first frame.
+
+**Icon: white mass, black line, four shapes.** No mouth, no whiskers — thin
+strokes turn to mush at 16px, which is the size that actually matters in a
+Dock and a Spotlight row. Pointed ears carry the "cat" on their own. Verified
+by counting pixels: zero non-grey pixels, ~79% white.
+
+**Ad-hoc sign on install.** electron-builder leaves a bundle whose signature
+block claims resources it does not have, so `spctl` reports it as *broken*
+rather than merely unsigned. `codesign --sign -` costs nothing and avoids a
+class of Gatekeeper weirdness that would be miserable to debug later.
+
 ## Decided, not built
 
 - **Status-driven layout** — the tile that needs you gets the big one.

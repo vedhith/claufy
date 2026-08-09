@@ -11,7 +11,43 @@
     "start": "npm run build && electron .",
     "dev": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "rebuild": "electron-rebuild -f -w node-pty"
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "dist": "npm run build && npm run icons && electron-builder --dir",
+    "install-app": "node scripts/install-app.mjs"
+  },
+  "build": {
+    "appId": "dev.vedhith.claufy",
+    "productName": "Claufy",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ]
+    },
+    "win": {
+      "icon": "assets/icon-256.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -22,6 +58,7 @@
     "@electron/rebuild": "^3.7.0",
     "@types/node": "^22.10.0",
     "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.24.0",
     "sharp": "^0.33.5",
     "typescript": "^5.7.0"
