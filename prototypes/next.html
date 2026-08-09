@@ -72,18 +72,20 @@
     </style>
   </head>
   <body>
-    <h1>Claufy icons — round three, all line art</h1>
+    <h1>Claufy icons — twelve terminal cats</h1>
     <p class="lede">
-      Everything from before is gone. These are <b>outlines</b>: a one-cell black edge, the tile
-      showing straight through the middle, and the eye and mouth in the same black.
-      <b>Nothing is filled.</b> Half the set is a side view — sitting, walking, loafing, asleep —
-      because twelve versions of one front-facing head is what made the last round samey.
+      You picked <b>#36, the shell prompt wearing ears</b>. These are twelve variants of exactly
+      that, each one a bit more cat: <b>whiskers, eyes, a tail, paws</b>, and two ear shapes.
       <br /><br />
-      They all sit on a <b>16-cell tile</b>, which is why the thin lines survive: 16 cells is
-      exactly 1px per cell at 16px, 2px at 32, 4px at 64. The icon that shipped used an 18-cell
-      tile — 0.888px per cell — so no edge landed on a pixel and every "pixel" came out a
-      different width. That is what looked uneven in the toolbar, and a one-cell outline would
-      show it far worse than a solid shape did.
+      They are <b>composed from layers</b>, not redrawn — one window, one pair of ears, and
+      features OR'd on top. A feature can add ink but never dent the frame, which is what went
+      wrong the first time the window motifs were drawn cell by cell and came out looking like
+      calendars. The canvas is the full 16 cells wide here, unlike the earlier heads, because
+      <b>whiskers have to stick out past the window's side walls</b> — the window sits in columns
+      2–13 and the whiskers use the two spare cells each side.
+      <br /><br />
+      Still outline-only, still a <b>16-cell tile</b> — exactly 1px per cell at 16px, 2px at 32,
+      4px at 64, which is what keeps a one-cell line crisp.
       <br /><br />
       Judge them in the toolbar strip, not at 128. Tell me a number.
     </p>
@@ -95,15 +97,22 @@
       </span>
     </div>
 
-    <h2 class="sec">All of them at once</h2>
-    <p class="sub">Every mark at 28px, the size it lives at. Hover for its number.</p>
+    <h2 class="sec">All twelve at once</h2>
+    <p class="sub">At 28px, the size it lives at. Hover for the name.</p>
     <div class="scan" id="scan"></div>
 
     <h2 class="sec">One at a time</h2>
     <div class="grid" id="grid"></div>
 
+    <h2 class="sec">Previous round, still here</h2>
+    <p class="sub">
+      The forty-one from last time, in case you want to go back. #36 was the prompt with ears —
+      it is #1 above now.
+    </p>
+    <div class="scan" id="scan-prev"></div>
+
     <script type="module">
-      import { variantsB } from './variants-b.mjs';
+      import { variantsB, variantsAll } from './variants-b.mjs';
       import { variants } from './variants.mjs';
 
       const SIZES = [16, 20, 24, 32, 64, 128];
@@ -114,12 +123,16 @@
       document.getElementById('shipped').innerHTML =
         svgOf(variants[0].art, 32) ;
 
-      document.getElementById('scan').innerHTML = variantsB
-        .map(
-          (v, i) =>
-            `<div class="cell" title="${v.name}">${svgOf(v.art, 28)}<span>${i + 1}</span></div>`,
-        )
-        .join('');
+      const strip = (list) =>
+        list
+          .map(
+            (v, i) =>
+              `<div class="cell" title="${v.name}">${svgOf(v.art, 28)}<span>${i + 1}</span></div>`,
+          )
+          .join('');
+
+      document.getElementById('scan').innerHTML = strip(variantsB);
+      document.getElementById('scan-prev').innerHTML = strip(variantsAll);
 
       const grid = document.getElementById('grid');
       variantsB.forEach((v, i) => {

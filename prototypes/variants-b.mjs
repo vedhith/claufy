@@ -541,9 +541,94 @@ const RAW = [
   ['Caret + cat', caretCat, 'A blinking cursor beside the head.'],
 ];
 
-export const variantsB = RAW.map(([name, rows, note], i) => {
+export const variantsAll = RAW.map(([name, rows, note], i) => {
   check(`#${i + 1} ${name}`, rows);
   return { name, rows, note, art: make(rows), cover: cover(rows) };
 });
 
-export { make, sprite, cover, mirror, overlay };
+// ======================================================================
+// Round five — twelve variants of #36, the shell prompt wearing ears.
+//
+// That one was picked, so this is the same idea made more cat: whiskers,
+// eyes, a tail, paws, two ear shapes. Everything is a LAYER on one shared
+// 16x13 canvas, OR'd together, which is what stops a feature from denting
+// the window frame — the failure that made the first window motifs read as
+// calendars was the ears being drawn into the frame rather than over it.
+//
+// The canvas is the full 16 cells wide, unlike everything above, because
+// whiskers have to stick OUT past the window's side walls. The window sits
+// in columns 2-13 and the whiskers use the two cells spare on each side.
+// ======================================================================
+
+const W = 16;
+const H = 13;
+
+// Build a sprite from layers. Later layers add ink, never remove it.
+function compose(...layers) {
+  const canvas = Array.from({ length: H }, () => '.'.repeat(W));
+  return layers.reduce((rows, layer) => {
+    for (const [k, patch] of Object.entries(layer)) {
+      if (patch.length !== W) throw new Error(`layer row ${k}: width ${patch.length}, want ${W}`);
+    }
+    return overlay(rows, layer);
+  }, canvas);
+}
+
+// rows 3-10: the window. Title bar on row 4, body rows 6-9.
+const WIN = {
+  3: '..############..',
+  4: '..#..........#..',
+  5: '..############..',
+  6: '..#..........#..',
+  7: '..#..........#..',
+  8: '..#..........#..',
+  9: '..#..........#..',
+  10: '..############..',
+};
+
+// Ear walls land exactly on the window's top corners (cols 2 and 13).
+const EARS_P = {
+  0: '....#......#....',
+  1: '...#.#....#.#...',
+  2: '..#...#..#...#..',
+};
+const EARS_R = {
+  0: '...##......##...',
+  1: '..#..#....#..#..',
+  2: '..#...#..#...#..',
+};
+
+const PROMPT = {
+  6: '....#...........',
+  7: '.....#..........',
+  8: '....#...........',
+  9: '.......#####....',
+};
+const EYES = { 4: '.....#....#.....' };
+const EYES_BIG = { 4: '....##....##....' };
+const NOSE = { 7: '.......##.......' };
+const WHISK = { 7: '##............##', 9: '##............##' };
+const PAWS = { 11: '....##....##....' };
+const TAIL = { 11: '.............#..', 12: '...........###..' };
+
+const TERMINAL_CATS = [
+  ['Prompt + ears', compose(EARS_P, WIN, PROMPT), 'The one you picked, rebuilt on the layered canvas. Baseline.'],
+  ['+ whiskers', compose(EARS_P, WIN, PROMPT, WHISK), 'Whiskers off both side walls. The cheapest way to make it read cat.'],
+  ['+ eyes', compose(EARS_P, WIN, PROMPT, EYES), 'The title bar dots become eyes instead of traffic lights.'],
+  ['+ eyes + whiskers', compose(EARS_P, WIN, PROMPT, EYES, WHISK), 'Both, over the prompt. The fullest face that keeps the prompt.'],
+  ['Face, no prompt', compose(EARS_P, WIN, EYES, NOSE, WHISK), 'Eyes, nose and whiskers, and the body left empty.'],
+  ['Round ears + prompt', compose(EARS_R, WIN, PROMPT), 'Folded ears — nothing comes to a single-cell point.'],
+  ['Round ears + face', compose(EARS_R, WIN, EYES, WHISK), 'Softest of the set: folded ears, eyes, whiskers.'],
+  ['+ tail', compose(EARS_P, WIN, PROMPT, TAIL), 'A tail slipping out of the bottom-right corner.'],
+  ['+ paws', compose(EARS_P, WIN, PROMPT, PAWS), 'Two paws under the window, as if it is sitting.'],
+  ['Everything', compose(EARS_P, WIN, PROMPT, EYES, WHISK, TAIL, PAWS), 'Ears, eyes, prompt, whiskers, tail and paws at once. Busiest here.'],
+  ['Eyes only', compose(EARS_P, WIN, EYES_BIG), 'No prompt at all — a window with ears and two wide eyes.'],
+  ['Whiskers only', compose(EARS_P, WIN, WHISK), 'Ears and whiskers, nothing inside. The quietest.'],
+];
+
+export const variantsB = TERMINAL_CATS.map(([name, rows, note], i) => {
+  check(`terminal #${i + 1} ${name}`, rows);
+  return { name, rows, note, art: make(rows), cover: cover(rows) };
+});
+
+export { make, sprite, cover, mirror, overlay, compose };
