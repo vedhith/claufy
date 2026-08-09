@@ -497,7 +497,9 @@
         '.##############.', '..############..', '....########....', '................',
       ];
 
-      function catSVG(px, ink = '#fff', bg = '#000') {
+      // Black cat on a white tile — the same variant the app icon is built from
+      // (prototypes/variants.mjs #1). Keep these two in step.
+      function catSVG(px, ink = '#000', bg = '#fff') {
         const cols = 16, cell = 512 / (cols + 2);
         let r = '';
         for (let y = 0; y < CAT.length; y++) {

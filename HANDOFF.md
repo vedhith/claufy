@@ -11,7 +11,9 @@ A cross-platform **Electron desktop app**. One window holding **tiles**. A tile 
 real terminal or a web page. Adding a tile re-spaces the rest; the tile you're
 working in **grows, animated**. Works on macOS, Windows and Linux.
 
-Repo: `~/Developer/claufy` — git, branch `master`, **no remote yet**.
+Repo: `~/Developer/claufy` → **https://github.com/kk-vp/claufy** (public, MIT),
+branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
+`claufy`, account `vedhithkrishnakumar@gmail.com`).
 
 > Earlier there was a macOS-only shell version that drove real Terminal.app
 > windows. It still exists at `~/.local/bin/claufy` (+ `claufy.js`) and still
@@ -32,7 +34,11 @@ Repo: `~/Developer/claufy` — git, branch `master`, **no remote yet**.
 | Packaged `.app` + installed to `~/Applications` | done, verified |
 | Spotlight finds it by typing "claufy" | done, verified |
 | Landing page with live demo | done, verified |
-| Publishing the site / hosted builds | **NOT STARTED — next task** |
+| Public repo, MIT licence | done — github.com/kk-vp/claufy |
+| CI release build (mac arm64 + x64, win, linux) | done, verified |
+| v0.1.0 release with 6 installers | done, verified |
+| Site live on Cloudflare Pages | done — claufy.pages.dev |
+| Custom domain | **NOT STARTED — waiting on the domain purchase** |
 
 ### Verified how
 
@@ -106,18 +112,59 @@ a `<button>` centres its content vertically, so the folder tiles needed
 `--` into one long dash, which made `--cwd` read as an em dash, so anything
 showing a real command sets `font-variant-ligatures: none`.
 
-**Still to do before launch:**
+**Launched.** All five of the old blockers are done: repo pushed, six installers
+published, real URLs on the page, hosted on Cloudflare Pages, and Windows/Linux
+builds proven by CI rather than assumed.
 
-1. **Push the repo.** There is no git remote. Nothing else can proceed without it.
-2. **Publish builds.** `site/index.html` has `const RELEASES = null`; the download
-   buttons currently toast "not published yet" and scroll to the build commands.
-   Set `RELEASES` to `{mac, win, linux}` URLs once GitHub Releases exist.
-3. **Fill in the clone URL** — the code block says `<repo>` in two places
-   (the visible block and the `copy` handler's string).
-4. Decide the host (Cloudflare Pages fits; the page is one static file).
-5. Windows and Linux builds have never actually been produced — `npm run dist`
-   has only run for macOS arm64. The config exists (`nsis`, `AppImage`) but is
-   unproven.
+### How a release happens now
+
+```bash
+git tag -a v0.1.2 -m "..." && git push origin v0.1.2   # that is the whole thing
+```
+
+`.github/workflows/release.yml` then builds on macos / windows / ubuntu in
+parallel and attaches the artifacts. Six of them:
+
+```
+Claufy-mac-arm64.dmg / .zip      Claufy-win-x64.exe
+Claufy-mac-x64.dmg   / .zip      Claufy-linux-x86_64.AppImage
+```
+
+`artifactName` deliberately carries **no version**, which is what makes
+`/releases/latest/download/<name>` a permanent link the site hardcodes.
+
+**The AppImage is `x86_64`, not `x64`** — AppImage names itself after the kernel
+arch string while every other target says x64. That mismatch shipped a 404 on the
+Linux button for about ten minutes. `npm run check-links` now fetches every
+GitHub URL on the page (including the ones built by string concatenation) and
+exits non-zero on anything that is not a 200. **Run it after any release.**
+
+### Verified how
+
+The **downloaded** `Claufy-mac-arm64.dmg` was mounted and its bundle run with
+`CLAUFY_SMOKE=1`, not just the local build:
+
+```
+bundle id dev.vedhith.claufy   version 0.1.0   Mach-O arm64
+spawn-helper -rwxr-xr-x        <- the execute-bit trap survives packaging
+ptyOk true   4/4 shells produced output   spawnErrors []   dead 0
+```
+
+Caveat: `curl` does not set `com.apple.quarantine`, so that run did **not**
+exercise Gatekeeper. The right-click → Open instruction on the site and in the
+README is the standard remedy for an unsigned app but has not been tested on a
+machine that downloaded it through a browser.
+
+**Still open:**
+
+1. **Custom domain** — the user is buying one. Attach with
+   `wrangler pages domain add <domain> --project-name claufy`, then point the
+   DNS at Cloudflare. Update `homepage` in `package.json` and the README header.
+2. **Code signing.** Unsigned on all three platforms, so every OS shows a scare
+   on first launch. Apple is $99/yr; Windows EV certs cost more. Documented
+   rather than solved.
+3. The Node 20 deprecation warning from the GitHub Actions runners is noise —
+   the actions are already forced onto Node 24.
 
 ## Commands
 
@@ -186,10 +233,21 @@ array. That detail is the whole trick.
 
 ## The icon
 
-**Variant 6 of 12: "Pixel cat, inverted" — white 16x16 pixel cat on a black
-rounded tile.** Chosen after three rejected directions (line-art cat, geometric
+**Variant 1 of 12: "Pixel cat" — black 16x16 pixel cat on a white rounded
+tile.** Chosen after three rejected directions (line-art cat, geometric
 primitives, irregular silhouette). The user's brief settled on: *pixelated,
 simple, like the Claude icon* — flat fill, one ink colour, no outlines.
+
+> It shipped briefly as **variant 6**, the same sprite inverted (white cat,
+> black tile), then the user asked for a black outline on a white background —
+> which is exactly variant 1. Same artwork, opposite ink.
+
+Consequence worth knowing: the two inline cats in `src/renderer/index.html`
+**keep their tile now**. They used not to, because a black tile behind a white
+cat was invisible against the app's dark bar. With the ink flipped, stripping
+the tile would leave black pixels on a dark bar — nothing at all. `apply-icon.mjs`
+therefore emits the full artwork, which also makes the in-app mark match the
+Dock icon.
 
 All 12 prototypes still live in `prototypes/variants.mjs`. To switch:
 `node scripts/apply-icon.mjs <n> && npm run icons && npm run dist && npm run install-app`.
