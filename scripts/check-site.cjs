@@ -42,6 +42,27 @@ app.whenReady().then(async () => {
     dispatchEvent(new KeyboardEvent('keydown', { key: '2' })); await settle();
     res.afterKey2 = read();
 
+    // agent view: pointing at a folder must dim every row it cannot see
+    const mini = [...document.querySelectorAll('#mini .mini-tile')];
+    const allRows = () => [...document.querySelectorAll('#rows .row')];
+    res.folders = mini.map(m => m.dataset.p);
+    res.rowsTotal = allRows().length;
+    res.unscopedVisible = allRows().filter(r => !r.classList.contains('faint')).length;
+
+    const infra = mini.find(m => m.dataset.p === 'infra');
+    infra.dispatchEvent(new MouseEvent('mouseenter'));
+    await settle();
+    res.scopedVisible = allRows().filter(r => !r.classList.contains('faint')).length;
+    res.scopedAreInfra = allRows()
+      .filter(r => !r.classList.contains('faint'))
+      .every(r => r.dataset.p === 'infra');
+    res.scopeFoot = document.getElementById('scope-foot').textContent.trim();
+
+    // leaving without pinning must restore the full list
+    document.getElementById('mini').dispatchEvent(new MouseEvent('mouseleave'));
+    await settle();
+    res.restoredVisible = allRows().filter(r => !r.classList.contains('faint')).length;
+
     res.markRendered = !!document.querySelector('#mark-hero svg rect');
     res.faviconSet = !!document.querySelector('link[rel=icon]');
     res.osButton = document.getElementById('get').textContent;

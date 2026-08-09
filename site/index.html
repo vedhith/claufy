@@ -6,7 +6,7 @@
     <title>Claufy — every window you're working in, on one screen</title>
     <meta
       name="description"
-      content="Claufy holds your terminals as tiles that space themselves. The one you're working in grows. macOS, Windows and Linux."
+      content="Claufy tiles your terminals — and any web app — in one window. The tile you're working in grows, and each one gets its own Claude agent view scoped to its folder instead of one shared list. macOS, Windows and Linux."
     />
     <style>
       /* Palette is the app's, which is Terminal.app "Clear Dark". Same surface
@@ -168,8 +168,85 @@
         border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px;
       }
 
+      /* --- agent view: shared list vs per-folder --------------------------
+         Two panels showing the same twelve agents. Left is the machine-wide
+         list Claude Code gives you; right is what each Claufy tile sees.
+         Pointing at a folder on the right dims everything on the left that
+         the folder cannot see — the scoping, drawn rather than described. */
+      .split { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+      .panel {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2);
+        display: flex; flex-direction: column; overflow: hidden;
+      }
+      .panel-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 13px; border-bottom: 1px solid var(--line);
+        font-size: 12.5px; color: var(--ink-dim);
+      }
+      .panel-head .dot.lit { background: var(--accent); }
+      .panel-foot {
+        margin: 0; padding: 9px 13px; border-top: 1px solid var(--line);
+        font-size: 11.5px; color: var(--ink-dim);
+        /* this line shows a real command; JetBrains Mono would fuse `--` into
+           one long dash, which reads as an em dash rather than two hyphens */
+        font-variant-ligatures: none;
+      }
+      .rows { padding: 6px; flex: 1; }
+      .row {
+        display: flex; align-items: center; gap: 9px;
+        padding: 5px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+        transition: opacity 220ms var(--ease), background 220ms var(--ease);
+      }
+      .row .proj { color: var(--ink-bold); width: 5ch; flex: none; }
+      .row .task { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+      .row .st { font-size: 11px; flex: none; }
+      .row.faint { opacity: 0.2; }
+      .row.hit { background: var(--sel); }
+      .st-working { color: var(--green); }
+      .st-waiting { color: var(--amber); }
+      .st-idle { color: var(--ink-dim); }
+
+      .mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 7px; flex: 1; }
+      .mini-tile {
+        border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+        padding: 9px 10px; cursor: pointer; text-align: left; font: inherit;
+        /* a <button> centres its content; these are tiles, so pin to the top */
+        display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+        transition: border-color 180ms var(--ease), background 180ms var(--ease);
+      }
+      .mini-tile:hover, .mini-tile.on, .mini-tile:focus-visible {
+        border-color: var(--accent); background: #1e2531; outline: none;
+      }
+      .mini-tile b { display: block; font-size: 12px; color: var(--ink-bold); margin-bottom: 6px; }
+      .mini-tile .ln { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; gap: 6px; }
+      .mini-tile.on .dot { background: var(--accent); }
+
+      .use {
+        list-style: none; padding: 0; margin: 24px 0 0;
+        display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .use li {
+        border-left: 2px solid var(--line); padding: 1px 0 1px 13px;
+        font-size: 13px; color: var(--ink-dim);
+      }
+      .use li strong { display: block; color: var(--ink); font-size: 13px; margin-bottom: 2px; }
+
+      .note {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2);
+        padding: 16px 18px; margin: 0; color: var(--ink-dim); font-size: 13.5px;
+      }
+      .note strong { color: var(--ink); }
+
+      code {
+        background: #202836; border: 1px solid var(--line); border-radius: 5px;
+        padding: 0 5px; font-size: 0.92em; color: var(--ink);
+        font-variant-ligatures: none;
+      }
+
       /* --- features ------------------------------------------------------ */
-      .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+      /* 400px keeps four cards as a 2x2 at desktop widths rather than 3 + an
+         orphan, and the min(100%, ...) lets them stack on a phone. */
+      .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); }
       .card {
         border: 1px solid var(--line); border-radius: 12px; padding: 18px;
         background: var(--bg-2);
@@ -187,6 +264,7 @@
         text-align: left; background: var(--bg-2); border: 1px solid var(--line);
         border-radius: 10px; padding: 14px 16px; margin: 18px auto 0; max-width: 560px;
         font-size: 13px; position: relative; color: #c3ccd6;
+        font-variant-ligatures: none;
       }
       .code .c { color: var(--ink-dim); }
       .copy {
@@ -240,6 +318,7 @@
         <span class="brand"><span id="mark-nav"></span> Claufy</span>
         <span class="sp"></span>
         <a class="ghost" href="#demo">Demo</a>
+        <a class="ghost" href="#agents">Agent view</a>
         <a class="ghost" href="#download">Download</a>
       </div>
     </nav>
@@ -248,8 +327,9 @@
       <div id="mark-hero" style="margin-bottom: 22px"></div>
       <h1>Every window you're working in,<br /><span class="hl">on one screen.</span></h1>
       <p class="sub">
-        Claufy holds your terminals as tiles. Open another and they re-space themselves.
-        Click one and it grows, because that's the one you're using.
+        Claufy holds your terminals as tiles. Open another and they re-space themselves;
+        click one and it grows, because that's the one you're using. Web apps tile too —
+        and every tile gets its own Claude agent view, scoped to its folder.
       </p>
       <div class="cta">
         <a class="btn primary" href="#download" id="get">Get Claufy</a>
@@ -285,6 +365,37 @@
       </p>
     </section>
 
+    <section class="wrap" id="agents">
+      <p class="eyebrow">The reason it exists</p>
+      <h2>Every project gets its own agent view</h2>
+      <p class="lede">
+        Claude Code's agent view lists each agent as its own row — what it's working on, and
+        whether it's waiting on you. But that list is <em>machine-wide</em>: every project you
+        have open, stacked in one column. Claufy hands each tile the same view narrowed to
+        <em>that tile's folder</em>, so a tile only ever shows its own project's agents.
+      </p>
+
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head"><span class="dot"></span>Claude's default — one shared list</div>
+          <div class="rows" id="rows"></div>
+          <p class="panel-foot">Twelve agents, four projects, one column to read.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="dot lit"></span>Claufy — one view per folder</div>
+          <div class="mini-grid" id="mini"></div>
+          <p class="panel-foot" id="scope-foot">Hover or tap a folder — that's everything it can see.</p>
+        </div>
+      </div>
+
+      <ul class="use">
+        <li><strong>One project per tile</strong>Four repos, four shells, four agent views — none of them showing each other's work.</li>
+        <li><strong>See who needs you</strong>The agent view marks a session waiting for input. With a tile each, you spot it without switching windows.</li>
+        <li><strong>Long jobs stay visible</strong>A build, a training run, a <code>tail -f</code> keeps its own tile while you work in another.</li>
+        <li><strong>Pin what the shell produces</strong>Put localhost, a dashboard or the docs in a tile beside the terminal building it.</li>
+      </ul>
+    </section>
+
     <section class="wrap">
       <div class="cards">
         <div class="card">
@@ -293,9 +404,21 @@
           <p>Every tile is a real login shell, so your aliases, prompt and PATH are exactly what you already have.</p>
         </div>
         <div class="card">
-          <span class="tag">Scoped</span>
-          <h3>One folder per tile</h3>
-          <p>Each tile only shows its own folder's agent sessions, instead of every session on the machine.</p>
+          <span class="tag">Not only terminals</span>
+          <h3>Any web app tiles too</h3>
+          <p>
+            Point a tile at localhost, a dashboard, docs, or any web app and it spaces itself with
+            the rest. Native desktop apps can't be embedded by any cross-platform toolkit, so those
+            still open in your OS.
+          </p>
+        </div>
+        <div class="card">
+          <span class="tag">Sharp</span>
+          <h3>Text never gets blurred</h3>
+          <p>
+            Growing a tile animates the grid tracks, not the tile. Scaling a terminal would resample
+            it and turn the glyphs to mush; this re-lays-out instead, so text stays crisp every frame.
+          </p>
         </div>
         <div class="card">
           <span class="tag">Everywhere</span>
@@ -303,6 +426,15 @@
           <p>One app window with tiles inside — not a window manager, so nothing takes over your OS.</p>
         </div>
       </div>
+    </section>
+
+    <section class="wrap">
+      <p class="note">
+        <strong>Why "Claufy"?</strong> The name comes from Claude. The first version existed to run
+        a stack of Claude terminals on a Mac — all the same size, one per project — because that was
+        the thing there was no good way to do. It tiles anything now, and terminals are still what
+        it's for, but that's where the name came from.
+      </p>
     </section>
 
     <section class="wrap dl" id="download">
@@ -475,6 +607,75 @@
       });
 
       render();
+
+      // ---- agent view: shared list vs per-folder -------------------------
+      // The same twelve agents, drawn twice. Pointing at a folder on the right
+      // dims every row on the left that folder cannot see, which is the whole
+      // difference between `claude agents` and `claude agents --cwd <dir>`.
+      const AGENTS = [
+        { p: 'api', t: 'refactor auth middleware', s: 'working' },
+        { p: 'web', t: 'fix the hydration warning', s: 'waiting' },
+        { p: 'infra', t: 'plan the VPC change', s: 'working' },
+        { p: 'api', t: 'write contract tests', s: 'idle' },
+        { p: 'docs', t: 'rewrite the quickstart', s: 'working' },
+        { p: 'infra', t: 'chase a flaky deploy', s: 'waiting' },
+        { p: 'web', t: 'port the settings page', s: 'working' },
+        { p: 'docs', t: 'check every code sample', s: 'idle' },
+        { p: 'api', t: 'trace the slow query', s: 'working' },
+        { p: 'infra', t: 'tighten the IAM policy', s: 'idle' },
+        { p: 'docs', t: 'screenshot the new UI', s: 'idle' },
+        { p: 'infra', t: 'bump the node version', s: 'working' },
+      ];
+      const PROJECTS = ['api', 'web', 'infra', 'docs'];
+
+      document.getElementById('rows').innerHTML = AGENTS.map(
+        (a) =>
+          `<div class="row" data-p="${a.p}"><span class="dot"></span>` +
+          `<span class="proj">${a.p}</span><span class="task">${a.t}</span>` +
+          `<span class="st st-${a.s}">${a.s}</span></div>`,
+      ).join('');
+
+      const miniEl = document.getElementById('mini');
+      miniEl.innerHTML = PROJECTS.map((p) => {
+        const mine = AGENTS.filter((a) => a.p === p);
+        const wait = mine.filter((a) => a.s === 'waiting').length;
+        return (
+          `<button class="mini-tile" data-p="${p}" aria-label="Agent view for ~/${p}">` +
+          `<b>~/${p}</b>` +
+          `<div class="ln"><span class="dot"></span>${mine.length} agent${mine.length === 1 ? '' : 's'} here</div>` +
+          `<div class="ln">` +
+          (wait
+            ? `<span class="st st-waiting">${wait} waiting on you</span>`
+            : `<span class="st st-idle">none waiting</span>`) +
+          `</div></button>`
+        );
+      }).join('');
+
+      const scopeFoot = document.getElementById('scope-foot');
+      let pinned = null;
+
+      function scope(p) {
+        document.querySelectorAll('#rows .row').forEach((r) => {
+          const hit = !p || r.dataset.p === p;
+          r.classList.toggle('faint', !hit);
+          r.classList.toggle('hit', !!p && hit);
+        });
+        document.querySelectorAll('#mini .mini-tile').forEach((t) => t.classList.toggle('on', t.dataset.p === p));
+        scopeFoot.textContent = p
+          ? `claude agents --cwd ~/${p}  —  ${AGENTS.filter((a) => a.p === p).length} of ${AGENTS.length} agents`
+          : 'Hover or tap a folder — that’s everything it can see.';
+      }
+
+      document.querySelectorAll('#mini .mini-tile').forEach((t) => {
+        const p = t.dataset.p;
+        t.addEventListener('mouseenter', () => scope(p));
+        t.addEventListener('focus', () => scope(p));
+        t.addEventListener('click', () => {
+          pinned = pinned === p ? null : p;
+          scope(pinned);
+        });
+      });
+      miniEl.addEventListener('mouseleave', () => scope(pinned));
 
       // ---- toast --------------------------------------------------------
       const toastEl = document.getElementById('toast');

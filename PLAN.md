@@ -64,6 +64,24 @@ block claims resources it does not have, so `spctl` reports it as *broken*
 rather than merely unsigned. `codesign --sign -` costs nothing and avoids a
 class of Gatekeeper weirdness that would be miserable to debug later.
 
+**The landing page leads with the agent view, not the tiling.** Tiling is easy to
+copy and easy to dismiss — "so it's tmux". Per-folder agent scoping is the thing
+nothing else does, and it is the reason the app exists. The page therefore draws
+the difference instead of describing it: the same twelve agents shown twice, Claude
+Code's machine-wide list beside four folder-scoped tiles, and pointing at a folder
+dims every row that folder cannot see. "Scoped" is a word people skim past; a list
+going dark is not.
+
+**Say on the page what it cannot do.** Web apps tile; native desktop apps cannot be
+embedded by any cross-platform toolkit, so the card says exactly that. A download
+page that oversells comes back as a bug report, and the honest limit costs nothing
+because the tiles people actually want next to a shell are web pages anyway.
+
+**Keep the name story visible.** Claufy is named after Claude because the first
+version existed to run a stack of Claude terminals on a Mac, uniformly, one per
+project. That is also the clearest one-paragraph explanation of who the app is for,
+so it earns its place on the page rather than living only in a README.
+
 ## Decided, not built
 
 - **Status-driven layout** — the tile that needs you gets the big one.

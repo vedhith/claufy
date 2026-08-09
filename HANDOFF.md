@@ -58,14 +58,28 @@ Add `CLAUFY_PROBE_DIR="/some/folder"` to run the scope probe.
 The landing page is **built and verified** at `site/index.html`. Serve it with
 `npm run site` (port 400; `/prototypes` still serves the icon set).
 
-What it has: hero with the pixel cat, a **live interactive demo** that animates
-the same `grid-template-*` tracks the app animates (click a tile, add/remove
-tiles, switch Equal/Grow/Solo, keys 1-9 and Esc), three feature cards, OS-detected
-download buttons, copy-to-clipboard build commands, and the desktop-hint pill
-required by the user's standing rule.
+What it has, top to bottom:
+
+1. Hero with the pixel cat.
+2. **Live interactive demo** — animates the same `grid-template-*` tracks the app
+   animates (click a tile, add/remove tiles, Equal/Grow/Solo, keys 1-9 and Esc).
+3. **"Every project gets its own agent view"** — the section that carries the
+   pitch. Two panels of the *same twelve agents*: Claude Code's machine-wide list
+   on the left, four folder-scoped Claufy tiles on the right. Hover or tap a
+   folder and every row it cannot see dims, while the panel footer prints the real
+   command (`claude agents --cwd ~/infra — 4 of 12 agents`). Under it, four use
+   cases: one project per tile, see who needs you, long jobs stay visible, pin
+   what the shell produces.
+4. Four feature cards — real shells, **any web app tiles too** (and the honest
+   note that native desktop apps cannot be embedded), text never blurs, all three
+   OSes.
+5. **"Why 'Claufy'?"** — the name is from Claude; the first version ran a stack of
+   Claude terminals on a Mac, one per project.
+6. OS-detected download buttons, copy-to-clipboard build commands, and the
+   desktop-hint pill required by the user's standing rule.
 
 Driven in a real browser via `npx electron scripts/check-site.cjs`, which clicks
-through the demo and prints the grid templates it produced:
+through the demo *and* the agent-view panels and prints what it measured:
 
 ```
 grow (default)   : 2.2fr 1fr
@@ -74,8 +88,23 @@ tiles after +2   : 6 -> 1fr 1fr 2.2fr
 solo             : 0fr 0fr 1fr   (5 tiles collapsed)
 equal            : 1fr 1fr 1fr
 after pressing 2 : 1fr 2.2fr 1fr
+agent panels     : 12 rows, 4 folders
+  unscoped       : 12 visible
+  hover ~/infra  : 4 visible, all of them infra
+  mouse out      : 12 visible again
 os button        : Get Claufy for macOS
 ```
+
+Narrow-viewport check at 390x780: `document.scrollWidth` is 390 with **zero**
+elements past the right edge, cards and panels stack to one column, and the
+desktop hint shows. At 1400 the cards are `533px 533px` — a 2x2, not 3 + an
+orphan.
+
+Two small traps found while building that section, both fixed in the CSS:
+a `<button>` centres its content vertically, so the folder tiles needed
+`flex-direction: column; justify-content: flex-start`; and JetBrains Mono fuses
+`--` into one long dash, which made `--cwd` read as an em dash, so anything
+showing a real command sets `font-variant-ligatures: none`.
 
 **Still to do before launch:**
 
