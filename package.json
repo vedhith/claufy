@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w node-pty",
     "dist": "npm run build && npm run icons && electron-builder --dir",
-    "install-app": "node scripts/install-app.mjs"
+    "install-app": "node scripts/install-app.mjs",
+    "site": "node scripts/serve.mjs"
   },
   "build": {
     "appId": "dev.vedhith.claufy",

@@ -31,7 +31,8 @@ Repo: `~/Developer/claufy` — git, branch `master`, **no remote yet**.
 | Icon — pixel cat, **variant 6** (white cat on black tile) | done |
 | Packaged `.app` + installed to `~/Applications` | done, verified |
 | Spotlight finds it by typing "claufy" | done, verified |
-| **Landing page** | **NOT STARTED — this is the next task** |
+| Landing page with live demo | done, verified |
+| Publishing the site / hosted builds | **NOT STARTED — next task** |
 
 ### Verified how
 
@@ -52,27 +53,42 @@ Add `CLAUFY_PROBE_DIR="/some/folder"` to run the scope probe.
 
 ---
 
-## NEXT TASK — the landing page
+## NEXT TASK — publish
 
-The user asked for: **a landing page with easy download, simple but impressive,
-interactive, easy.** It will be launched as a real site.
+The landing page is **built and verified** at `site/index.html`. Serve it with
+`npm run site` (port 400; `/prototypes` still serves the icon set).
 
-Not started. Nothing exists for it yet. Suggested shape:
+What it has: hero with the pixel cat, a **live interactive demo** that animates
+the same `grid-template-*` tracks the app animates (click a tile, add/remove
+tiles, switch Equal/Grow/Solo, keys 1-9 and Esc), three feature cards, OS-detected
+download buttons, copy-to-clipboard build commands, and the desktop-hint pill
+required by the user's standing rule.
 
-- Lives in `site/` in this repo (nothing there now).
-- Hero: the pixel cat, the one line — *"Every window you're working in, on one screen."*
-- **Interactive demo**: a fake Claufy grid in the browser where clicking a tile
-  makes it grow, using the *same* `grid-template-*` animation the app uses. That
-  is the product's whole idea and it demos in ten seconds without a download.
-- Download buttons per OS. There is no hosted build yet — builds are local only
-  (`npm run dist`). Decide whether to point at GitHub Releases (needs the repo
-  pushed) or ship the page with the buttons disabled until then.
-- Standing rule from the user's global CLAUDE.md: **every site gets the desktop
-  hint pill.** Copy the canonical implementation, do not reinvent:
-  `website/desktop-hint.js` in `~/Developer/amethyst` (static HTML) or
-  `src/components/DesktopHint.tsx` in `vedhith-portfolio` (React/Next).
+Driven in a real browser via `npx electron scripts/check-site.cjs`, which clicks
+through the demo and prints the grid templates it produced:
 
----
+```
+grow (default)   : 2.2fr 1fr
+after click last : 1fr 2.2fr
+tiles after +2   : 6 -> 1fr 1fr 2.2fr
+solo             : 0fr 0fr 1fr   (5 tiles collapsed)
+equal            : 1fr 1fr 1fr
+after pressing 2 : 1fr 2.2fr 1fr
+os button        : Get Claufy for macOS
+```
+
+**Still to do before launch:**
+
+1. **Push the repo.** There is no git remote. Nothing else can proceed without it.
+2. **Publish builds.** `site/index.html` has `const RELEASES = null`; the download
+   buttons currently toast "not published yet" and scroll to the build commands.
+   Set `RELEASES` to `{mac, win, linux}` URLs once GitHub Releases exist.
+3. **Fill in the clone URL** — the code block says `<repo>` in two places
+   (the visible block and the `copy` handler's string).
+4. Decide the host (Cloudflare Pages fits; the page is one static file).
+5. Windows and Linux builds have never actually been produced — `npm run dist`
+   has only run for macOS arm64. The config exists (`nsis`, `AppImage`) but is
+   unproven.
 
 ## Commands
 
@@ -88,8 +104,10 @@ npm run dist         # build Claufy.app into release/
 npm run install-app  # copy to ~/Applications, ad-hoc sign, tell Spotlight
 
 node scripts/apply-icon.mjs 6      # bake prototype N into the shipped icon
-node prototypes/serve.mjs          # icon prototypes at http://localhost:400
+npm run site                       # landing page at http://localhost:400
+                                   # icon prototypes at /prototypes
 node prototypes/sheet.mjs          # render prototypes/sheet.png contact sheet
+npx electron scripts/check-site.cjs   # drive the landing page demo, print results
 ```
 
 ---
@@ -102,6 +120,9 @@ src/main/preload.ts     the only bridge between tiles and shells
 src/renderer/index.ts   grid maths, tiles, focus animation, TERM_THEME
 src/renderer/styles.css palette tokens (all from Clear Dark)
 src/renderer/index.html markup; the two inline cats are GENERATED
+site/index.html         the landing page, one self-contained file
+scripts/serve.mjs       dev server: / = site, /prototypes = icon set
+scripts/check-site.cjs  drives the landing demo in a real browser
 prototypes/variants.mjs the 12 icon prototypes — single source of truth
 scripts/apply-icon.mjs  bakes a prototype into assets/cat.svg + index.html
 scripts/build.mjs       esbuild: main, preload, renderer + static copy

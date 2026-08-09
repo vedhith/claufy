@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claufy — every window you're working in, on one screen</title>
+    <meta
+      name="description"
+      content="Claufy holds your terminals as tiles that space themselves. The one you're working in grows. macOS, Windows and Linux."
+    />
+    <style>
+      /* Palette is the app's, which is Terminal.app "Clear Dark". Same surface
+         on the site as in the product. */
+      :root {
+        --bg: #191d27;
+        --bg-2: #141821;
+        --ink: #e0e0e0;
+        --ink-bold: #ededed;
+        --ink-dim: #7d8b99;
+        --line: #2a3441;
+        --accent: #67b5ed;
+        --sel: #273d4c;
+        --green: #79be7e;
+        --amber: #e5c872;
+        --red: #df6c5a;
+        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.6 var(--mono);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      .wrap { width: min(1080px, 100% - 40px); margin-inline: auto; }
+
+      a { color: var(--accent); }
+
+      /* --- nav ----------------------------------------------------------- */
+      nav {
+        position: sticky; top: 0; z-index: 20;
+        background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
+      }
+      nav .wrap { display: flex; align-items: center; gap: 14px; height: 58px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: 0.3px; }
+      .brand svg { border-radius: 7px; display: block; }
+      nav .sp { flex: 1; }
+      nav a.ghost { color: var(--ink-dim); text-decoration: none; font-size: 13.5px; }
+      nav a.ghost:hover { color: var(--ink); }
+
+      /* --- hero ---------------------------------------------------------- */
+      header { padding: 72px 0 34px; text-align: center; }
+      h1 {
+        font-size: clamp(28px, 5.2vw, 52px);
+        line-height: 1.12;
+        margin: 0 0 18px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+      h1 .hl { color: var(--accent); }
+      .sub {
+        color: var(--ink-dim);
+        font-size: clamp(14px, 2.1vw, 17px);
+        margin: 0 auto 30px;
+        max-width: 60ch;
+      }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+      .btn {
+        font: inherit; font-size: 14px;
+        border: 1px solid var(--line);
+        background: #202836; color: var(--ink);
+        padding: 11px 18px; border-radius: 9px; cursor: pointer;
+        text-decoration: none; display: inline-flex; align-items: center; gap: 9px;
+        transition: transform 120ms var(--ease), background 140ms var(--ease), border-color 140ms var(--ease);
+      }
+      .btn:hover { background: #29323f; border-color: #465c6d; transform: translateY(-1px); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #0f1620; font-weight: 600; }
+      .btn.primary:hover { background: #83c4f2; border-color: #83c4f2; }
+
+      /* --- the demo ------------------------------------------------------ */
+      section { padding: 46px 0; }
+      .eyebrow {
+        color: var(--accent); font-size: 12px; letter-spacing: 1.6px;
+        text-transform: uppercase; margin: 0 0 8px;
+      }
+      h2 { font-size: clamp(20px, 3vw, 27px); margin: 0 0 8px; letter-spacing: -0.2px; }
+      .lede { color: var(--ink-dim); margin: 0 0 22px; max-width: 66ch; }
+
+      .demo {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--bg-2);
+        overflow: hidden;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+      .demo-bar {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 10px 12px; border-bottom: 1px solid var(--line);
+      }
+      .lights { display: flex; gap: 6px; margin-right: 4px; }
+      .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .demo-bar .sp { flex: 1 1 auto; }
+      .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .seg button {
+        font: inherit; font-size: 12.5px; background: transparent; color: var(--ink-dim);
+        border: 0; padding: 6px 13px; cursor: pointer; transition: all 140ms var(--ease);
+      }
+      .seg button + button { border-left: 1px solid var(--line); }
+      .seg button[aria-pressed="true"] { background: var(--accent); color: #0f1620; font-weight: 600; }
+      .mini {
+        font: inherit; font-size: 12.5px; background: #202836; color: var(--ink);
+        border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; cursor: pointer;
+      }
+      .mini:hover { background: #29323f; }
+      .mini:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      /* The whole trick: the tile sizes live in grid-template-*, which the
+         browser interpolates. Exactly what the app does. */
+      .grid {
+        display: grid; gap: 8px; padding: 8px;
+        height: clamp(300px, 46vw, 430px);
+        transition: grid-template-columns 380ms var(--ease), grid-template-rows 380ms var(--ease);
+      }
+      .tile {
+        min-width: 0; min-height: 0; overflow: hidden;
+        background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+        display: flex; flex-direction: column; cursor: pointer;
+        transition: border-color 200ms var(--ease), opacity 200ms var(--ease), background 200ms var(--ease);
+      }
+      .tile:hover { border-color: #465c6d; }
+      .tile.on { border-color: var(--accent); background: #1e2531; }
+      .tile.gone { opacity: 0; pointer-events: none; }
+      .tile-head {
+        display: flex; align-items: center; gap: 7px;
+        padding: 5px 9px; border-bottom: 1px solid var(--line);
+        font-size: 11.5px; color: var(--ink-dim); white-space: nowrap;
+      }
+      .tile.on .tile-head { color: var(--ink-bold); }
+      .dot { width: 6px; height: 6px; border-radius: 50%; background: #35424c; flex: none; }
+      .tile.on .dot { background: var(--accent); }
+      .tile-body {
+        flex: 1; min-height: 0; padding: 8px 10px;
+        font-size: 11.5px; line-height: 1.65; overflow: hidden; color: #c3ccd6;
+      }
+      .tile-body .p { color: var(--green); }
+      .tile-body .d { color: var(--ink-dim); }
+      .tile-body .a { color: var(--amber); }
+      .caret {
+        display: inline-block; width: 7px; height: 13px; vertical-align: -2px;
+        background: var(--accent); animation: blink 1.05s steps(2, start) infinite;
+      }
+      @keyframes blink { to { visibility: hidden; } }
+
+      .hintline { color: var(--ink-dim); font-size: 12.5px; margin: 12px 0 0; text-align: center; }
+      kbd {
+        font: inherit; font-size: 11.5px; background: #202836; color: var(--ink);
+        border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px;
+      }
+
+      /* --- features ------------------------------------------------------ */
+      .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+      .card {
+        border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+        background: var(--bg-2);
+      }
+      .card h3 { margin: 0 0 7px; font-size: 15px; }
+      .card p { margin: 0; color: var(--ink-dim); font-size: 13.5px; }
+      .card .tag {
+        display: inline-block; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+        color: var(--accent); margin-bottom: 9px;
+      }
+
+      /* --- download ------------------------------------------------------ */
+      .dl { text-align: center; border-top: 1px solid var(--line); padding-top: 44px; }
+      .code {
+        text-align: left; background: var(--bg-2); border: 1px solid var(--line);
+        border-radius: 10px; padding: 14px 16px; margin: 18px auto 0; max-width: 560px;
+        font-size: 13px; position: relative; color: #c3ccd6;
+      }
+      .code .c { color: var(--ink-dim); }
+      .copy {
+        position: absolute; top: 9px; right: 9px;
+        font: inherit; font-size: 11.5px; background: #202836; color: var(--ink-dim);
+        border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; cursor: pointer;
+      }
+      .copy:hover { color: var(--ink); }
+
+      footer {
+        border-top: 1px solid var(--line); margin-top: 40px; padding: 24px 0 40px;
+        color: var(--ink-dim); font-size: 12.5px; text-align: center;
+      }
+
+      /* --- toast --------------------------------------------------------- */
+      #toast {
+        position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 12px);
+        background: #202836; border: 1px solid var(--line); color: var(--ink);
+        padding: 10px 16px; border-radius: 9px; font-size: 13px;
+        opacity: 0; pointer-events: none; z-index: 40; max-width: min(520px, 90vw);
+        transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+      }
+      #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+      /* --- desktop hint (standing rule: every site ships this) ------------ */
+      #desktop-hint {
+        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+        display: none; align-items: center; gap: 10px; z-index: 50;
+        background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px;
+        padding: 10px 14px; color: #fff; font-size: 12.5px;
+        max-width: calc(100vw - 28px);
+      }
+      #desktop-hint.show { display: flex; }
+      #desktop-hint svg { flex: none; }
+      #desktop-hint button {
+        background: transparent; border: 0; color: rgba(255, 255, 255, 0.65);
+        font: inherit; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { transition-duration: 1ms !important; animation: none !important; }
+        html { scroll-behavior: auto; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav>
+      <div class="wrap">
+        <span class="brand"><span id="mark-nav"></span> Claufy</span>
+        <span class="sp"></span>
+        <a class="ghost" href="#demo">Demo</a>
+        <a class="ghost" href="#download">Download</a>
+      </div>
+    </nav>
+
+    <header class="wrap">
+      <div id="mark-hero" style="margin-bottom: 22px"></div>
+      <h1>Every window you're working in,<br /><span class="hl">on one screen.</span></h1>
+      <p class="sub">
+        Claufy holds your terminals as tiles. Open another and they re-space themselves.
+        Click one and it grows, because that's the one you're using.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href="#download" id="get">Get Claufy</a>
+        <a class="btn" href="#demo">Try it right here ↓</a>
+      </div>
+    </header>
+
+    <section class="wrap" id="demo">
+      <p class="eyebrow">Live — no download</p>
+      <h2>This is the whole idea</h2>
+      <p class="lede">
+        Click any tile. Add a few. Switch the focus mode. This demo animates the same CSS grid
+        tracks the real app animates — which is why terminal text stays sharp instead of being
+        scaled and blurred.
+      </p>
+
+      <div class="demo">
+        <div class="demo-bar">
+          <span class="lights"><i style="background:#df6c5a"></i><i style="background:#e5c872"></i><i style="background:#79be7e"></i></span>
+          <div class="seg" role="group" aria-label="Focus mode">
+            <button data-mode="equal">Equal</button>
+            <button data-mode="grow" aria-pressed="true">Grow</button>
+            <button data-mode="solo">Solo</button>
+          </div>
+          <span class="sp"></span>
+          <button class="mini" id="add">+ Tile</button>
+          <button class="mini" id="rm">− Tile</button>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <p class="hintline">
+        Tip: press <kbd>1</kbd>–<kbd>9</kbd> to jump between tiles, or <kbd>Esc</kbd> to leave Solo.
+      </p>
+    </section>
+
+    <section class="wrap">
+      <div class="cards">
+        <div class="card">
+          <span class="tag">Real shells</span>
+          <h3>Not a fake terminal</h3>
+          <p>Every tile is a real login shell, so your aliases, prompt and PATH are exactly what you already have.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Scoped</span>
+          <h3>One folder per tile</h3>
+          <p>Each tile only shows its own folder's agent sessions, instead of every session on the machine.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Everywhere</span>
+          <h3>macOS, Windows, Linux</h3>
+          <p>One app window with tiles inside — not a window manager, so nothing takes over your OS.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap dl" id="download">
+      <p class="eyebrow">Download</p>
+      <h2 id="dl-title">Get Claufy</h2>
+      <p class="lede" style="margin-inline: auto; text-align: center">
+        Free and open source. Pick your platform, or build it yourself in two commands.
+      </p>
+      <div class="cta">
+        <button class="btn primary" data-os="mac">macOS</button>
+        <button class="btn" data-os="win">Windows</button>
+        <button class="btn" data-os="linux">Linux</button>
+      </div>
+
+      <div class="code">
+        <button class="copy" id="copy">Copy</button>
+        <div><span class="c"># build it yourself</span></div>
+        <div>git clone &lt;repo&gt; claufy &amp;&amp; cd claufy</div>
+        <div>npm install &amp;&amp; npm start</div>
+      </div>
+    </section>
+
+    <footer>
+      Claufy — tiles for the windows you actually work in.
+    </footer>
+
+    <div id="toast" role="status"></div>
+
+    <div id="desktop-hint">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <path d="M8 21h8M12 17v4" />
+      </svg>
+      <span>Better viewing experience on a PC or a full-screen monitor</span>
+      <button id="hint-x" aria-label="Dismiss">×</button>
+    </div>
+
+    <script>
+      // ---- the mark -----------------------------------------------------
+      // Same 16x16 grid the app icon is drawn from. Cheaper than inlining
+      // 12kB of <rect>, and it keeps the pixel grid visible in the source.
+      const CAT = [
+        '................', '.##..........##.', '.###........###.', '.####......####.',
+        '.##############.', '################', '################', '###oo######oo###',
+        '###oo######oo###', '################', '#######oo#######', '.##############.',
+        '.##############.', '..############..', '....########....', '................',
+      ];
+
+      function catSVG(px, ink = '#fff', bg = '#000') {
+        const cols = 16, cell = 512 / (cols + 2);
+        let r = '';
+        for (let y = 0; y < CAT.length; y++) {
+          for (let x = 0; x < cols; x++) {
+            const ch = CAT[y][x];
+            if (ch !== '#' && ch !== 'o') continue;
+            r += `<rect x="${((x + 1) * cell).toFixed(2)}" y="${((y + 1) * cell).toFixed(2)}" ` +
+                 `width="${(cell + 0.5).toFixed(2)}" height="${(cell + 0.5).toFixed(2)}" ` +
+                 `fill="${ch === '#' ? ink : bg}"/>`;
+          }
+        }
+        return `<svg width="${px}" height="${px}" viewBox="0 0 512 512" shape-rendering="crispEdges">` +
+               `<rect width="512" height="512" rx="112" fill="${bg}"/>${r}</svg>`;
+      }
+
+      document.getElementById('mark-nav').innerHTML = catSVG(24);
+      document.getElementById('mark-hero').innerHTML = catSVG(84);
+      // Favicon from the same source, so it can never drift.
+      const fav = document.createElement('link');
+      fav.rel = 'icon';
+      fav.href = 'data:image/svg+xml,' + encodeURIComponent(catSVG(64));
+      document.head.append(fav);
+
+      // ---- the demo grid ------------------------------------------------
+      const SAMPLES = [
+        { t: 'api', lines: [['p', '~/api ❯'], ['d', 'npm run dev'], ['a', 'ready on :3000']] },
+        { t: 'web', lines: [['p', '~/web ❯'], ['d', 'vite build'], ['d', '✓ 412 modules']] },
+        { t: 'infra', lines: [['p', '~/infra ❯'], ['d', 'terraform plan'], ['a', '2 to add']] },
+        { t: 'docs', lines: [['p', '~/docs ❯'], ['d', 'git status'], ['d', 'clean']] },
+        { t: 'jobs', lines: [['p', '~/jobs ❯'], ['d', 'tail -f queue.log'], ['a', '18 pending']] },
+        { t: 'db', lines: [['p', '~/db ❯'], ['d', 'psql'], ['d', '12 rows']] },
+        { t: 'ml', lines: [['p', '~/ml ❯'], ['d', 'python train.py'], ['a', 'epoch 3/10']] },
+        { t: 'edge', lines: [['p', '~/edge ❯'], ['d', 'wrangler dev'], ['d', 'localhost:8787']] },
+        { t: 'logs', lines: [['p', '~/logs ❯'], ['d', 'grep ERROR'], ['d', 'no matches']] },
+      ];
+
+      const grid = document.getElementById('grid');
+      let count = 4, active = 0, mode = 'grow', prevMode = 'grow';
+      const RATIO = 2.2;
+
+      // Identical to the app: as square as possible, filling left to right.
+      const shape = (n) => {
+        const cols = Math.ceil(Math.sqrt(n));
+        return { cols, rows: Math.ceil(n / cols) };
+      };
+
+      const tracks = (n, hot) =>
+        Array.from({ length: n }, (_, i) =>
+          mode === 'equal' || hot < 0 ? '1fr' : mode === 'solo' ? (i === hot ? '1fr' : '0fr') : i === hot ? RATIO + 'fr' : '1fr',
+        ).join(' ');
+
+      function render() {
+        grid.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+          const s = SAMPLES[i % SAMPLES.length];
+          const el = document.createElement('div');
+          el.className = 'tile' + (i === active ? ' on' : '');
+          el.innerHTML =
+            `<div class="tile-head"><span class="dot"></span><span>${s.t}</span></div>` +
+            `<div class="tile-body">` +
+            s.lines.map((l) => `<div class="${l[0]}">${l[1]}</div>`).join('') +
+            (i === active ? '<div><span class="caret"></span></div>' : '') +
+            `</div>`;
+          el.addEventListener('click', () => { active = i; layout(); });
+          grid.append(el);
+        }
+        layout();
+      }
+
+      function layout() {
+        const { cols, rows } = shape(count);
+        grid.style.gridTemplateColumns = tracks(cols, active % cols);
+        grid.style.gridTemplateRows = tracks(rows, Math.floor(active / cols));
+        [...grid.children].forEach((el, i) => {
+          el.classList.toggle('on', i === active);
+          el.classList.toggle('gone', mode === 'solo' && i !== active);
+          const body = el.querySelector('.tile-body');
+          const has = !!body.querySelector('.caret');
+          if (i === active && !has) body.insertAdjacentHTML('beforeend', '<div><span class="caret"></span></div>');
+          if (i !== active && has) body.querySelector('.caret').parentElement.remove();
+        });
+        document.getElementById('add').disabled = count >= 9;
+        document.getElementById('rm').disabled = count <= 1;
+      }
+
+      document.querySelectorAll('.seg button').forEach((b) => {
+        b.addEventListener('click', () => {
+          mode = b.dataset.mode;
+          if (mode !== 'solo') prevMode = mode;
+          document.querySelectorAll('.seg button').forEach((o) =>
+            o.setAttribute('aria-pressed', String(o === b)),
+          );
+          layout();
+        });
+      });
+
+      const setMode = (m) => {
+        mode = m;
+        document.querySelectorAll('.seg button').forEach((o) =>
+          o.setAttribute('aria-pressed', String(o.dataset.mode === m)),
+        );
+        layout();
+      };
+
+      document.getElementById('add').addEventListener('click', () => {
+        if (count >= 9) return;
+        count++; active = count - 1; render();
+      });
+      document.getElementById('rm').addEventListener('click', () => {
+        if (count <= 1) return;
+        count--; if (active >= count) active = count - 1; render();
+      });
+
+      addEventListener('keydown', (e) => {
+        if (e.key >= '1' && e.key <= '9') {
+          const i = +e.key - 1;
+          if (i < count) { active = i; layout(); }
+        } else if (e.key === 'Escape' && mode === 'solo') {
+          setMode(prevMode);
+        }
+      });
+
+      render();
+
+      // ---- toast --------------------------------------------------------
+      const toastEl = document.getElementById('toast');
+      let tt;
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('show');
+        clearTimeout(tt);
+        tt = setTimeout(() => toastEl.classList.remove('show'), 3400);
+      }
+
+      // ---- download -----------------------------------------------------
+      // No published builds yet, so say so rather than serve a dead link.
+      const RELEASES = null;
+      const NAMES = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
+
+      const ua = navigator.userAgent;
+      const myOS = /Mac/i.test(ua) ? 'mac' : /Win/i.test(ua) ? 'win' : 'linux';
+      document.getElementById('get').textContent = 'Get Claufy for ' + NAMES[myOS];
+
+      document.querySelectorAll('[data-os]').forEach((b) => {
+        if (b.dataset.os === myOS) b.classList.add('primary');
+        else b.classList.remove('primary');
+        b.addEventListener('click', () => {
+          if (RELEASES) { location.href = RELEASES[b.dataset.os]; return; }
+          toast('Builds are not published yet — grab the source below, it is two commands.');
+          document.querySelector('.code').scrollIntoView({ block: 'center' });
+        });
+      });
+
+      document.getElementById('copy').addEventListener('click', async () => {
+        const cmd = 'git clone <repo> claufy && cd claufy\nnpm install && npm start';
+        try {
+          await navigator.clipboard.writeText(cmd);
+          toast('Copied.');
+        } catch {
+          toast('Copy failed — select the text instead.');
+        }
+      });
+
+      // ---- desktop hint --------------------------------------------------
+      // Decided by the SHORT side, not the width: a TV is coarse-pointered and
+      // often reports a narrow CSS width, and a phone in landscape is ~844
+      // wide while having 390 of usable height.
+      (function desktopHint() {
+        const key = 'desktop-hint:' + location.hostname;
+        if (localStorage.getItem(key)) return;
+        const w = innerWidth, h = innerHeight;
+        const coarse = matchMedia('(pointer: coarse)').matches;
+        const show = w >= 1280 ? false : Math.min(w, h) < 600 ? true : coarse && w < 900;
+        if (!show) return;
+        const el = document.getElementById('desktop-hint');
+        el.classList.add('show');
+        document.getElementById('hint-x').addEventListener('click', () => {
+          el.classList.remove('show');
+          try { localStorage.setItem(key, '1'); } catch {}
+        });
+      })();
+    </script>
+  </body>
+</html>
