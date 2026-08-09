@@ -1,6 +1,6 @@
 {
   "name": "claufy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Every window you're working in, on one screen. Open terminals and pages as tiles that space themselves, and the one you're using grows.",
   "license": "MIT",
