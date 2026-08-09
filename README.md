@@ -71,16 +71,46 @@ Thin at 12pt. To retarget it at a different profile, decode
 floats — and replace `TERM_THEME` in `src/renderer/index.ts` plus the tokens at
 the top of `src/renderer/styles.css`.
 
+## A tile behaves like the terminal it replaces
+
+| You do | It does |
+| --- | --- |
+| Select, then Copy | Copies what xterm has selected — **not** the page selection |
+| Paste | Goes in through bracketed paste, so a pasted block is not run line by line |
+| `Ctrl` + `C` on Windows/Linux | Interrupts. Copies only when text is selected, then drops the selection |
+| Right-click | Copy / Paste / Select All / Clear / Open Link — a real native menu |
+| `Cmd`/`Ctrl`-click a URL | Opens it. URLs are underlined, including ones wrapped over several rows |
+| Drag a file or folder in | Types its path, quoted, exactly like Terminal.app |
+| Middle-click (Linux) | Pastes the primary selection, which selecting in a tile fills |
+| `Shift` + `Insert` / `Ctrl` + `Insert` | Paste / copy, the older convention |
+| Text size | `Cmd/Ctrl` + `+` / `-` / `0`, remembered |
+| Scrollback | 50,000 lines, so the top of a build log survives |
+
 ## Keys
 
-| Key | Does |
-| --- | --- |
-| `Cmd/Ctrl` + `T` | New terminal tile |
-| `Cmd/Ctrl` + `W` | Close the active tile |
-| `Cmd/Ctrl` + `Enter` | Blow the active tile up to fill the window, and back |
-| `Cmd/Ctrl` + `1…9` | Jump to a tile — in Stage, swap it into the middle |
-| `Esc` | Leave full-window mode |
-| Double-click a tile's header | Same as `Cmd/Ctrl` + `Enter` |
+The two platforms cannot share a table, and that is the point. On macOS the
+terminal never sees `Cmd`, so the app takes `Cmd`. On Windows and Linux every
+bare `Ctrl` chord belongs to the shell — `Ctrl+C` interrupts, `Ctrl+R` searches
+history, `Ctrl+A` goes to the start of the line — so the app takes `Ctrl+Shift`
+and leaves all of them alone.
+
+| Does | macOS | Windows / Linux |
+| --- | --- | --- |
+| New terminal tile | `Cmd`+`T` | `Ctrl`+`Shift`+`T` |
+| New terminal in a folder | `Cmd`+`Shift`+`T` | `Ctrl`+`Shift`+`O` |
+| Close the active tile | `Cmd`+`W` | `Ctrl`+`Shift`+`W` |
+| Copy / Paste / Select All | `Cmd`+`C` / `V` / `A` | `Ctrl`+`Shift`+`C` / `V` / `A` |
+| Clear | `Cmd`+`K` | `Ctrl`+`Shift`+`K` |
+| Fill the window with one tile, and back | `Cmd`+`Enter` | `Ctrl`+`Enter` |
+| Jump to a tile — in Stage, swap it into the middle | `Cmd`+`1…9` | `Alt`+`1…9` |
+| Next / previous tile | `Cmd`+`Alt`+`←`/`→` | `Ctrl`+`Alt`+`←`/`→` |
+| Leave full-window mode | `Esc` | `Esc` |
+
+Double-clicking a tile's header fills the window with it, same as the key.
+
+Reload is deliberately **not** on `Cmd/Ctrl`+`R`: that is history search in
+every shell, and Electron's default menu binding it there meant `Ctrl+R`
+reloaded the app out from under four running terminals.
 
 ## The four focus modes
 
@@ -135,6 +165,11 @@ real Stage swap and measures the boxes either side of it, prints a JSON report
 and exits. It calls the same functions the buttons do, so a pass means the real
 paths work — `stageSwap.restStayedPut` is the claim that nothing but the two
 tiles moved.
+
+It also copies what a shell actually printed to the **real system clipboard**
+and reads it back, pastes a probe string in and finds it in the buffer, clicks
+the real menu items and checks the commands arrive, and lists every accelerator
+so the chords a shell needs can be seen to be free.
 
 ## Layout
 

@@ -23,6 +23,10 @@ construction.
 - Cat icon, drawn as SVG, rasterised by `npm run icons`.
 - `CLAUFY_SMOKE=1` self-test that drives the real functions and prints JSON.
 
+- Terminal parity: copy, paste, select all, clear, a native right-click menu,
+  clickable URLs, drag-a-file-to-type-its-path, middle-click paste, text size,
+  50k scrollback, and platform-correct accelerators.
+
 ## Decisions, and why
 
 **Animate grid tracks, not the tiles.** The obvious approach — transform/scale
@@ -130,6 +134,51 @@ because the tiles people actually want next to a shell are web pages anyway.
 version existed to run a stack of Claude terminals on a Mac, uniformly, one per
 project. That is also the clearest one-paragraph explanation of who the app is for,
 so it earns its place on the page rather than living only in a README.
+
+**Every editing command is a message to the renderer, never an Electron
+`role`.** This is the root cause of "copy doesn't work". Claufy had no menu of
+its own, so Electron's default one was in charge, and its Copy is a `role` —
+Chromium's Copy, which copies the *document* selection. A terminal's selection
+belongs to xterm, is drawn by xterm, and is invisible to the document, so Cmd+C
+ran, succeeded, and copied nothing. Copy now asks xterm for `getSelection()`;
+paste reads the clipboard and hands it to `term.paste()` so bracketed-paste
+mode is respected and a pasted block is not executed line by line.
+
+**The clipboard goes through the main process, not `navigator.clipboard`.** The
+async read needs a permission and a user gesture, and a menu accelerator
+reliably has neither. Electron's `clipboard` is synchronous, always available,
+and is the only way to reach X11's primary selection, which is what middle-click
+pastes on Linux.
+
+**Windows and Linux may not use bare Ctrl chords, and Electron's default menu
+does.** That inherited menu bound Copy to Ctrl+C, Select All to Ctrl+A and
+Reload to Ctrl+R. In a terminal those are interrupt, start-of-line, and history
+search — so a shell in a tile could not be interrupted, and Ctrl+R reloaded the
+whole app out from under every running shell. The app now takes Ctrl+Shift
+there (GNOME Terminal's and Windows Terminal's convention) and leaves every
+bare Ctrl chord to the pty. macOS is the opposite case: the terminal never sees
+Cmd, so Cmd+C/V/A/K are free and are what Terminal.app itself uses. The smoke
+test asserts no menu item binds `Ctrl+<letter>`, which is why the mac-only
+items spell out `Cmd` rather than `CommandOrControl` — otherwise the check
+cannot tell a legitimate Cmd+Q from a Ctrl+Q that would break flow control.
+
+**A dropped file types its path; it does not navigate.** Dropping a file on an
+Electron window navigates to it by default, which replaces the entire app and
+takes every running shell with it. `will-navigate` is refused outright, and a
+drop on a tile is quoted and pasted the way Terminal.app does it.
+
+**Links need a modifier.** Clicking a tile to focus it is the most common click
+in the app, and a plain-click link would open a browser every time one landed
+on a URL. Hover still underlines, and right-click offers Open Link.
+
+**`requestAnimationFrame` is not a timer, and this was a real bug.** Opening a
+tile waited on a double rAF before measuring it, then spawned the shell. When
+the window is occluded or minimised Chromium stops firing rAF entirely, so a
+tile opened while Claufy sat behind another window never got past that line:
+no shell, no error, just an empty tile that only woke up if you happened to
+bring the window forward. It is now raced against a 250ms timer. It surfaced as
+a smoke test that hung at the step which opens terminals, about half the time,
+depending on whether the window was frontmost.
 
 ## Decided, not built
 

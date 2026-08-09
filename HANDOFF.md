@@ -31,6 +31,10 @@ branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 | Auto re-space when a tile is added | done, verified |
 | Focus modes Equal / Grow / Solo, animated | done, verified |
 | **Stage** — one in the middle, rails either side, click to swap | done, verified |
+| Copy / paste / select all / clear, right-click menu | done, verified |
+| Shell-safe accelerators (Ctrl+C interrupts on Win/Linux) | done, verified |
+| Clickable URLs, drag-a-file-to-type-its-path, 50k scrollback | done |
+| Find in a tile (Cmd/Ctrl+F) | **NOT STARTED — needs addon-search** |
 | Theme copied from Terminal.app "Clear Dark" | done, verified |
 | Per-tile folder-scoped `claude agents` | done, verified |
 | Icon — pixel cat, **variant 6** (white cat on black tile) | done |

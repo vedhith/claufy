@@ -4,7 +4,17 @@
 // decides the layout; it never touches a shell directly. Every pty is keyed by
 // the pane id the renderer made up, so the two sides only ever exchange ids.
 
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  nativeImage,
+  Menu,
+  clipboard,
+  type MenuItemConstructorOptions,
+} from 'electron';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
@@ -38,6 +48,7 @@ const shimDirs = new Map<string, string>();
 let win: BrowserWindow | null = null;
 
 const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
 
 // --- per-tile scoping ---------------------------------------------------
 
@@ -167,6 +178,192 @@ function defaultShell(): string {
   return process.env.SHELL || '/bin/bash';
 }
 
+// --- menus --------------------------------------------------------------
+
+// Every editing command is a message to the renderer, never an Electron
+// `role`. A role runs Chromium's own Copy, which copies the *document*
+// selection — and a terminal's selection is xterm's, drawn by xterm, invisible
+// to the document. Roles are why copy silently did nothing.
+function send(cmd: string) {
+  win?.webContents.send('app:command', cmd);
+}
+
+function item(label: string, cmd: string, accelerator?: string): MenuItemConstructorOptions {
+  return { label, accelerator, click: () => send(cmd) };
+}
+
+// Which keys an app may take differs completely between the two worlds, and
+// getting it wrong is worse than having no menu at all.
+//
+// On macOS the terminal never sees Cmd, so Cmd+C/V/A/K are free and are what
+// Terminal.app itself uses.
+//
+// On Windows and Linux every bare Ctrl chord belongs to the shell: Ctrl+C is
+// interrupt, Ctrl+R is history search, Ctrl+Z suspends, Ctrl+A goes to the
+// start of the line, Ctrl+W kills a word. Electron's *default* menu binds
+// Copy/Paste/Select All/Reload to exactly those, which is why a shell in a
+// tile could not be interrupted and Ctrl+R reloaded the whole app. So the app
+// takes Ctrl+Shift instead, the same convention as GNOME Terminal and Windows
+// Terminal, and leaves every bare Ctrl chord to the pty.
+const K = {
+  newTerm: isMac ? 'Cmd+T' : 'Ctrl+Shift+T',
+  newFolder: isMac ? 'Cmd+Shift+T' : 'Ctrl+Shift+O',
+  closeTile: isMac ? 'Cmd+W' : 'Ctrl+Shift+W',
+  closeWindow: isMac ? 'Cmd+Shift+W' : 'Ctrl+Shift+Q',
+  copy: isMac ? 'Cmd+C' : 'Ctrl+Shift+C',
+  paste: isMac ? 'Cmd+V' : 'Ctrl+Shift+V',
+  selectAll: isMac ? 'Cmd+A' : 'Ctrl+Shift+A',
+  clear: isMac ? 'Cmd+K' : 'Ctrl+Shift+K',
+  zoom: 'CommandOrControl+Return',
+  bigger: 'CommandOrControl+Plus',
+  smaller: 'CommandOrControl+-',
+  resetText: 'CommandOrControl+0',
+  reload: isMac ? 'Cmd+Alt+R' : 'Ctrl+Shift+R',
+  devtools: isMac ? 'Cmd+Alt+I' : 'Ctrl+Shift+I',
+};
+
+function buildMenu(): Menu {
+  const template: MenuItemConstructorOptions[] = [];
+
+  // Spelled out rather than `role: 'appMenu'`, which binds Quit and Hide to
+  // CommandOrControl — correct on macOS, but it would read as Ctrl+Q and
+  // Ctrl+H on the other two, and both of those belong to the shell. Writing
+  // Cmd explicitly keeps the audit below able to tell the difference.
+  if (isMac) {
+    template.push({
+      label: 'Claufy',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', accelerator: 'Cmd+H' },
+        { role: 'hideOthers', accelerator: 'Cmd+Alt+H' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit', accelerator: 'Cmd+Q' },
+      ],
+    });
+  }
+
+  template.push({
+    label: isMac ? 'Shell' : 'File',
+    submenu: [
+      item('New Terminal', 'new-terminal', K.newTerm),
+      item('New Terminal in Folder…', 'new-terminal-folder', K.newFolder),
+      item('New Web Page…', 'new-page'),
+      { type: 'separator' },
+      item('Close Tile', 'close-tile', K.closeTile),
+      isMac
+        ? { role: 'close', label: 'Close Window', accelerator: K.closeWindow }
+        : { role: 'quit', label: 'Quit', accelerator: K.closeWindow },
+    ],
+  });
+
+  template.push({
+    label: 'Edit',
+    submenu: [
+      item('Copy', 'copy', K.copy),
+      item('Paste', 'paste', K.paste),
+      item('Select All', 'select-all', K.selectAll),
+      { type: 'separator' },
+      item('Clear', 'clear', K.clear),
+    ],
+  });
+
+  template.push({
+    label: 'View',
+    submenu: [
+      item('Stage', 'mode-stage'),
+      item('Equal', 'mode-equal'),
+      item('Grow', 'mode-grow'),
+      item('Solo', 'mode-solo'),
+      { type: 'separator' },
+      item('Zoom Tile', 'zoom-tile', K.zoom),
+      item('Next Tile', 'next-tile', isMac ? 'Cmd+Alt+Right' : 'Ctrl+Alt+Right'),
+      item('Previous Tile', 'prev-tile', isMac ? 'Cmd+Alt+Left' : 'Ctrl+Alt+Left'),
+      { type: 'separator' },
+      item('Bigger Text', 'font-bigger', K.bigger),
+      item('Smaller Text', 'font-smaller', K.smaller),
+      item('Default Text Size', 'font-reset', K.resetText),
+      { type: 'separator' },
+      { role: 'togglefullscreen' },
+      // Deliberately not Cmd/Ctrl+R: that is history search in every shell.
+      { role: 'forceReload', label: 'Reload Claufy', accelerator: K.reload },
+      { role: 'toggleDevTools', accelerator: K.devtools },
+    ],
+  });
+
+  if (isMac) {
+    template.push({
+      label: 'Window',
+      submenu: [
+        { role: 'minimize', accelerator: 'Cmd+M' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    });
+  }
+
+  template.push({
+    role: 'help',
+    submenu: [
+      {
+        label: 'Claufy on the web',
+        click: () => void shell.openExternal('https://claufy.pages.dev'),
+      },
+    ],
+  });
+
+  return Menu.buildFromTemplate(template);
+}
+
+// Part of CLAUFY_SMOKE. The renderer's own checks call copy and paste
+// directly, which proves the clipboard works but not that a keystroke reaches
+// it. This clicks the real menu items and reads back what the renderer
+// received, and lists every accelerator so the chords the shell needs can be
+// seen to be free.
+async function checkMenu() {
+  const menu = Menu.getApplicationMenu();
+  if (!menu || !win) return { built: false };
+
+  const bindings: { label: string; accelerator: string }[] = [];
+  const walk = (items: Electron.MenuItem[]) => {
+    for (const it of items) {
+      if (it.accelerator) bindings.push({ label: it.label, accelerator: it.accelerator });
+      if (it.submenu) walk(it.submenu.items);
+    }
+  };
+  walk(menu.items);
+
+  const click = (menuLabel: string, itemLabel: string) => {
+    const top = menu.items.find((i) => i.label === menuLabel);
+    const found = top?.submenu?.items.find((i) => i.label === itemLabel);
+    if (!found) return false;
+    found.click();
+    return true;
+  };
+
+  const clicked = {
+    copy: click('Edit', 'Copy'),
+    paste: click('Edit', 'Paste'),
+    newTerminal: click(isMac ? 'Shell' : 'File', 'New Terminal'),
+    stage: click('View', 'Stage'),
+  };
+
+  await new Promise((r) => setTimeout(r, 500));
+  const received: string[] = await win.webContents.executeJavaScript('window.__claufyCommands');
+
+  // Ctrl+R is history search, Ctrl+C is interrupt, Ctrl+A is start-of-line.
+  // Electron's default menu binds all three; ours must bind none of them. Only
+  // letters are checked: Ctrl+0 and Ctrl+- are the text-size bindings every
+  // terminal emulator uses and no shell wants.
+  const stolenFromShell = bindings.filter((b) => /^(Ctrl|CommandOrControl)\+[A-Za-z]$/.test(b.accelerator));
+
+  return { built: true, clicked, received, stolenFromShell, bindings };
+}
+
 function createWindow() {
   const iconPng = path.join(__dirname, '..', 'assets', 'icon.png');
   const icon = fs.existsSync(iconPng) ? nativeImage.createFromPath(iconPng) : undefined;
@@ -192,6 +389,15 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
+  // Dropping a file on a tile should type its path, not replace the whole app
+  // with that file — which is what a window-level drop does by default, and it
+  // takes every running shell with it.
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
   // CLAUFY_SMOKE=1 boots the app, exercises the real layout code, prints a
   // report and exits. Lets the whole stack be checked without a human at the
   // screen, and fails loudly if the renderer throws on startup.
@@ -207,8 +413,16 @@ function createWindow() {
         await win!.webContents.executeJavaScript(
           'window.__claufyProbeDir=' + JSON.stringify(process.env.CLAUFY_PROBE_DIR ?? ''),
         );
-        const report = await win!.webContents.executeJavaScript('window.__claufySmoke()');
+        // Raced against a timeout so a stuck step reports which step, rather
+        // than leaving a windowless app running for as long as anyone waits.
+        const report = await Promise.race([
+          win!.webContents.executeJavaScript('window.__claufySmoke()'),
+          new Promise((r) => setTimeout(() => r({ timedOut: true }), 60_000)),
+        ]);
+        const stage = await win!.webContents.executeJavaScript('window.__claufyStage');
+        console.log('SMOKE STAGE ' + stage);
         console.log('SMOKE ' + JSON.stringify(report));
+        console.log('SMOKE MENU ' + JSON.stringify(await checkMenu()));
       } catch (err) {
         console.log('SMOKE ERROR ' + (err instanceof Error ? err.message : String(err)));
       }
@@ -234,6 +448,7 @@ app.whenReady().then(() => {
       try { app.dock?.setIcon(nativeImage.createFromPath(iconPng)); } catch { /* dev only */ }
     }
   }
+  Menu.setApplicationMenu(buildMenu());
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -321,6 +536,59 @@ ipcMain.on('pty:kill', (_e, { id }: { id: string }) => {
   try { p.kill(); } catch { /* already gone */ }
   ptys.delete(id);
   dropShim(id);
+});
+
+// --- clipboard ----------------------------------------------------------
+
+// 'selection' is X11's primary selection — the one middle-click pastes. It
+// only exists on Linux; asking for it anywhere else returns the normal
+// clipboard, which would silently paste the wrong thing.
+const isLinux = process.platform === 'linux';
+
+ipcMain.handle('clipboard:read', (_e, which?: 'clipboard' | 'selection') =>
+  which === 'selection' && isLinux ? clipboard.readText('selection') : clipboard.readText(),
+);
+
+ipcMain.on('clipboard:write', (_e, { text, which }: { text: string; which?: 'clipboard' | 'selection' }) => {
+  if (typeof text !== 'string' || !text) return;
+  if (which === 'selection') {
+    if (isLinux) clipboard.writeText(text, 'selection');
+    return;
+  }
+  clipboard.writeText(text);
+});
+
+// Right-click. Terminal.app has this menu and people reach for it, so it is a
+// real native one rather than a div that would not match the OS.
+ipcMain.on('menu:context', (_e, info: { hasSelection: boolean; kind: 'term' | 'page'; link?: string }) => {
+  if (!win) return;
+  const items: MenuItemConstructorOptions[] = [];
+
+  if (info.link) {
+    items.push(
+      { label: 'Open Link', click: () => void shell.openExternal(info.link!) },
+      { label: 'Copy Link', click: () => clipboard.writeText(info.link!) },
+      { type: 'separator' },
+    );
+  }
+
+  items.push(
+    { label: 'Copy', accelerator: K.copy, enabled: info.hasSelection, click: () => send('copy') },
+    { label: 'Paste', accelerator: K.paste, enabled: clipboard.readText().length > 0, click: () => send('paste') },
+    { label: 'Select All', accelerator: K.selectAll, click: () => send('select-all') },
+  );
+
+  if (info.kind === 'term') {
+    items.push({ type: 'separator' }, { label: 'Clear', accelerator: K.clear, click: () => send('clear') });
+  }
+
+  items.push(
+    { type: 'separator' },
+    { label: 'New Terminal', accelerator: K.newTerm, click: () => send('new-terminal') },
+    { label: 'Close Tile', accelerator: K.closeTile, click: () => send('close-tile') },
+  );
+
+  Menu.buildFromTemplate(items).popup({ window: win });
 });
 
 // --- misc ---------------------------------------------------------------

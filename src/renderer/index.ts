@@ -17,7 +17,16 @@ type Pane = {
   slot: number;
   term?: Terminal;
   fit?: FitAddon;
+  view?: WebviewTag;
   dead?: boolean;
+};
+
+// The handful of <webview> methods used here. Electron ships types for the tag
+// but pulling them in would mean depending on electron from the renderer.
+type WebviewTag = HTMLElement & {
+  copy(): void;
+  paste(): void;
+  selectAll(): void;
 };
 
 declare global {
@@ -34,6 +43,11 @@ declare global {
       pickFolder(): Promise<string | null>;
       homedir(): Promise<string>;
       openExternal(t: string): Promise<{ ok: boolean; error?: string }>;
+      clipboardRead(which?: 'clipboard' | 'selection'): Promise<string>;
+      clipboardWrite(text: string, which?: 'clipboard' | 'selection'): void;
+      contextMenu(info: { hasSelection: boolean; kind: 'term' | 'page'; link?: string }): void;
+      onCommand(cb: (cmd: string) => void): void;
+      filePath(f: File): string;
       platform: string;
     };
   }
@@ -59,9 +73,13 @@ let ptyErr: string | null = null;
 
 const isMac = window.claufy.platform === 'darwin';
 if (isMac) bar.classList.add('mac');
-const modKeyLabel = isMac ? 'Cmd' : 'Ctrl';
+// On Windows and Linux every bare Ctrl chord belongs to the shell, so the app
+// takes Ctrl+Shift there. The hint has to say which one this machine uses.
+const newTileKey = isMac ? 'Cmd' : 'Ctrl+Shift';
 const newkey = document.getElementById('newkey');
-if (newkey) newkey.textContent = modKeyLabel;
+if (newkey) newkey.textContent = newTileKey;
+const addTermBtn = document.getElementById('add-term');
+if (addTermBtn) addTermBtn.title = `New terminal (${newTileKey}+T)`;
 
 // --- theme --------------------------------------------------------------
 
@@ -94,9 +112,11 @@ const TERM_THEME = {
 
 // --- settings -----------------------------------------------------------
 
-type Settings = { mode: Mode; ratio: number };
-const DEFAULTS: Settings = { mode: 'stage', ratio: 2.2 };
+type Settings = { mode: Mode; ratio: number; fontSize: number };
+const DEFAULTS: Settings = { mode: 'stage', ratio: 2.2, fontSize: 12 };
 const MODES: Mode[] = ['stage', 'equal', 'grow', 'solo'];
+const FONT_MIN = 8;
+const FONT_MAX = 28;
 
 function loadSettings(): Settings {
   try {
@@ -105,7 +125,11 @@ function loadSettings(): Settings {
     const s = JSON.parse(raw) as Partial<Settings>;
     const mode: Mode = MODES.includes(s.mode as Mode) ? (s.mode as Mode) : DEFAULTS.mode;
     const ratio = typeof s.ratio === 'number' && s.ratio >= 1 && s.ratio <= 6 ? s.ratio : DEFAULTS.ratio;
-    return { mode, ratio };
+    const fontSize =
+      typeof s.fontSize === 'number' && s.fontSize >= FONT_MIN && s.fontSize <= FONT_MAX
+        ? s.fontSize
+        : DEFAULTS.fontSize;
+    return { mode, ratio, fontSize };
   } catch {
     return { ...DEFAULTS };
   }
@@ -420,6 +444,15 @@ function makePane(kind: Pane['kind'], title: string): Pane {
     e.stopPropagation();
     closePane(pane.id);
   });
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    setActive(pane.id);
+    window.claufy.contextMenu({
+      hasSelection: pane.term ? pane.term.hasSelection() : true,
+      kind: pane.kind,
+      link: hoveredLink.get(pane.id),
+    });
+  });
 
   panes.push(pane);
   // A tile you just opened is the one you want to look at, so it lands on the
@@ -454,7 +487,187 @@ function closePane(id: string) {
         : panes[Math.min(i, panes.length - 1)].id;
   }
   layout();
-  if (activeId) panes.find((x) => x.id === activeId)?.term?.focus();
+  focusPane(activePane());
+}
+
+function activePane(): Pane | undefined {
+  return activeId ? panes.find((p) => p.id === activeId) : undefined;
+}
+
+function focusPane(p: Pane | undefined) {
+  if (!p) return;
+  if (p.term) p.term.focus();
+  else p.view?.focus();
+}
+
+// --- terminal parity ----------------------------------------------------
+
+// Everything below exists because a tile has to behave like the terminal
+// window it replaces. xterm draws its own selection on its own canvas, so the
+// browser's Copy has nothing to copy and the platform's Paste has nowhere to
+// put it — both have to be wired by hand.
+
+const isLinux = window.claufy.platform === 'linux';
+
+// Where the pointer is resting, if it is resting on a link. Right-click reads
+// it so "Open Link" can appear the way it does in Terminal.app.
+const hoveredLink = new Map<string, string>();
+
+function copyFrom(pane: Pane): boolean {
+  if (pane.term) {
+    const text = pane.term.getSelection();
+    if (!text) return false;
+    window.claufy.clipboardWrite(text);
+    return true;
+  }
+  pane.view?.copy();
+  return true;
+}
+
+async function pasteInto(pane: Pane, which?: 'clipboard' | 'selection') {
+  if (!pane.term) { pane.view?.paste(); return; }
+  const text = await window.claufy.clipboardRead(which);
+  if (text) pane.term.paste(text);
+}
+
+// Quote a dropped path the way a shell needs it, so a folder with a space in
+// its name is one argument rather than two.
+function shellQuote(p: string): string {
+  if (window.claufy.platform === 'win32') return /[\s&()[\]{}^=;!'+,`~]/.test(p) ? `"${p}"` : p;
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(p)) return p;
+  return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
+const URL_RE = /(?:https?:\/\/|www\.)[^\s"'`<>\\^{}|]+/g;
+
+type FoundLink = {
+  url: string;
+  href: string;
+  startX: number; startY: number;
+  endX: number; endY: number;
+};
+
+// Split out of the link provider so the wrap arithmetic can be checked
+// directly — it is the part most likely to be subtly wrong. `text` is the
+// whole logical line, untrimmed, so every row in it is exactly `cols` wide and
+// mapping an offset back to a row is a division. Coordinates come back 1-based,
+// which is what xterm's IBufferRange wants.
+function findLinks(text: string, cols: number, startRow: number): FoundLink[] {
+  const out: FoundLink[] = [];
+  URL_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = URL_RE.exec(text)) !== null) {
+    // Trailing punctuation is almost always the sentence, not the URL.
+    const url = m[0].replace(/[.,;:!?)\]]+$/, '');
+    if (!url) continue;
+    const from = m.index;
+    const to = from + url.length - 1;
+    out.push({
+      url,
+      href: /^www\./i.test(url) ? `https://${url}` : url,
+      startX: (from % cols) + 1,
+      startY: startRow + Math.floor(from / cols) + 1,
+      endX: (to % cols) + 1,
+      endY: startRow + Math.floor(to / cols) + 1,
+    });
+  }
+  return out;
+}
+
+// Clickable URLs, without the web-links addon: read the whole wrapped line out
+// of the buffer, find URLs in it, and map the character offsets back to
+// row/column. Every buffer row is exactly `cols` wide when it is not trimmed,
+// which is what makes the mapping a division.
+function registerLinks(pane: Pane, term: Terminal) {
+  term.registerLinkProvider({
+    provideLinks(y, cb) {
+      const buf = term.buffer.active;
+      const cols = term.cols;
+
+      let start = y - 1;
+      while (start > 0 && buf.getLine(start)?.isWrapped) start--;
+
+      let text = '';
+      for (let i = start; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (!line) break;
+        if (i > start && !line.isWrapped) break;
+        text += line.translateToString(false);
+      }
+
+      const links = findLinks(text, cols, start)
+        // Only the row xterm asked about.
+        .filter((l) => y >= l.startY && y <= l.endY)
+        .map((l) => ({
+          range: { start: { x: l.startX, y: l.startY }, end: { x: l.endX, y: l.endY } },
+          text: l.url,
+          // A modifier is required on purpose. Clicking a tile to focus it is
+          // the most common click there is, and it must never open a browser.
+          activate: (ev: MouseEvent) => {
+            if (!(ev.metaKey || ev.ctrlKey)) return;
+            void window.claufy.openExternal(l.href);
+          },
+          hover: () => hoveredLink.set(pane.id, l.href),
+          leave: () => hoveredLink.delete(pane.id),
+        }));
+      cb(links.length ? links : undefined);
+    },
+  });
+}
+
+function wireTerminalInput(pane: Pane, term: Terminal, host: HTMLElement) {
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true;
+
+    // On Windows and Linux, Ctrl+C is interrupt — except when text is
+    // selected, when every terminal on those platforms copies instead. The
+    // selection is cleared afterwards so the next Ctrl+C interrupts again.
+    if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
+      copyFrom(pane);
+      term.clearSelection();
+      return false;
+    }
+
+    // The older clipboard convention, still muscle memory for a lot of people.
+    if (e.key === 'Insert' && e.shiftKey && !e.ctrlKey) { void pasteInto(pane); return false; }
+    if (e.key === 'Insert' && e.ctrlKey && !e.shiftKey) { copyFrom(pane); return false; }
+
+    return true;
+  });
+
+  registerLinks(pane, term);
+
+  if (isLinux) {
+    // X11's primary selection: selecting fills it, middle-click pastes it.
+    term.onSelectionChange(() => {
+      const text = term.getSelection();
+      if (text) window.claufy.clipboardWrite(text, 'selection');
+    });
+    host.addEventListener('mousedown', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      void pasteInto(pane, 'selection');
+    });
+  }
+
+  // Drop a file or folder to type its path, quoted — what dragging onto
+  // Terminal.app does. Without this the drop navigated the window to the file
+  // and took every running shell with it.
+  pane.body.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  pane.body.addEventListener('drop', (e) => {
+    e.preventDefault();
+    setActive(pane.id);
+    const paths = Array.from(e.dataTransfer?.files ?? [])
+      .map((f) => window.claufy.filePath(f))
+      .filter(Boolean);
+    const text = paths.length
+      ? paths.map(shellQuote).join(' ') + ' '
+      : (e.dataTransfer?.getData('text/plain') ?? '');
+    if (text) term.paste(text);
+  });
 }
 
 async function addTerminal(cwd?: string, command?: string) {
@@ -481,10 +694,13 @@ async function addTerminal(cwd?: string, command?: string) {
   const term = new Terminal({
     // Font, size and the whole palette are the user's Terminal.app "Clear Dark"
     // profile, so a tile is indistinguishable from the window it replaces.
-    fontSize: 12,
+    fontSize: settings.fontSize,
     fontFamily: '"JetBrainsMono NFP Thin", "JetBrainsMono Nerd Font Propo", "JetBrains Mono", ui-monospace, Menlo, monospace',
     cursorBlink: true,
     allowProposedApi: true,
+    // xterm keeps 1000 lines by default, which loses the top of any real build
+    // log. Terminal.app's own default is unlimited; 50k is the honest middle.
+    scrollback: 50000,
     theme: TERM_THEME,
   });
   const fit = new FitAddon();
@@ -492,10 +708,19 @@ async function addTerminal(cwd?: string, command?: string) {
   term.open(host);
   pane.term = term;
   pane.fit = fit;
+  wireTerminalInput(pane, term, host);
 
   layout();
   // Let the grid settle before measuring, or the first fit is a wrong size.
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Raced against a timer on purpose: Chromium stops firing rAF when the
+  // window is occluded or minimised, and waiting on it alone means a tile
+  // opened while Claufy is behind another window never reaches the spawn below
+  // — no shell, no error, just an empty tile that comes back to life only if
+  // you happen to bring the window forward.
+  await Promise.race([
+    new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    new Promise((r) => setTimeout(r, 250)),
+  ]);
   try { fit.fit(); } catch { /* zero-sized while animating */ }
 
   const res = await window.claufy.spawn({
@@ -552,10 +777,11 @@ function addPage(url: string) {
   try { host = new URL(target).host; } catch { toast('That does not look like a URL.'); return; }
 
   const pane = makePane('page', host);
-  const view = document.createElement('webview');
+  const view = document.createElement('webview') as WebviewTag;
   view.setAttribute('src', target);
   view.setAttribute('allowpopups', 'false');
   pane.body.append(view);
+  pane.view = view;
   setActive(pane.id);
   layout();
 }
@@ -589,43 +815,163 @@ function toast(msg: string) {
   toastTimer = window.setTimeout(() => toastEl.classList.remove('show'), 2600);
 }
 
-document.getElementById('add-term')!.addEventListener('click', () => void addTerminal());
-document.getElementById('add-term-dir')!.addEventListener('click', async () => {
+async function openFolderTerminal() {
   const dir = await window.claufy.pickFolder();
   if (dir) void addTerminal(dir);
-});
-document.getElementById('add-page')!.addEventListener('click', () => {
+}
+
+function openPageDialog() {
   pageUrl.value = '';
   pageDialog.showModal();
   pageUrl.focus();
-});
+}
+
+function setMode(mode: Mode) {
+  settings.mode = mode;
+  modeSel.value = mode;
+  sizeWrap.style.visibility = mode === 'grow' ? 'visible' : 'hidden';
+  saveSettings();
+  stageTheActive();
+  layout();
+}
+
+function step(delta: number) {
+  if (panes.length < 2) return;
+  const i = activeId ? panes.findIndex((p) => p.id === activeId) : -1;
+  const next = ((i < 0 ? 0 : i + delta) + panes.length) % panes.length;
+  setActive(panes[next].id);
+}
+
+function setFontSize(next: number) {
+  const size = Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(next)));
+  if (size === settings.fontSize) return;
+  settings.fontSize = size;
+  saveSettings();
+  for (const p of panes) {
+    if (!p.term) continue;
+    p.term.options.fontSize = size;
+    try {
+      p.fit?.fit();
+      window.claufy.resize(p.id, p.term.cols, p.term.rows);
+    } catch { /* mid-animation zero size */ }
+  }
+}
+
+document.getElementById('add-term')!.addEventListener('click', () => void addTerminal());
+document.getElementById('add-term-dir')!.addEventListener('click', () => void openFolderTerminal());
+document.getElementById('add-page')!.addEventListener('click', openPageDialog);
 
 pageDialog.addEventListener('close', () => {
   if (pageDialog.returnValue === 'ok') addPage(pageUrl.value);
 });
 
+// The URL field in the Open-a-page dialog is a real text input, and Cmd+C /
+// Cmd+V / Cmd+A must act on it while it has focus rather than on the terminal
+// behind the dialog. xterm's own hidden textarea is not one of these.
+function focusedInput(): HTMLInputElement | HTMLTextAreaElement | null {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return null;
+  if (el.classList.contains('xterm-helper-textarea')) return null;
+  return el;
+}
+
+async function pasteIntoInput(input: HTMLInputElement | HTMLTextAreaElement) {
+  const text = await window.claufy.clipboardRead();
+  if (!text) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  input.value = input.value.slice(0, start) + text + input.value.slice(end);
+  const caret = start + text.length;
+  input.setSelectionRange(caret, caret);
+}
+
+// Read by the smoke test, which clicks real menu items and then checks that
+// the command arrived here.
+const commandsSeen: string[] = [];
+(window as unknown as { __claufyCommands: string[] }).__claufyCommands = commandsSeen;
+
+// The menu bar and the right-click menu name a command; the tile you are in
+// performs it. Nothing here goes through an Electron `role`, because a role
+// would act on the document and a terminal's text is not in the document.
+window.claufy.onCommand((cmd) => {
+  commandsSeen.push(cmd);
+  const input = focusedInput();
+  if (input) {
+    if (cmd === 'copy') {
+      const text = input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0);
+      if (text) window.claufy.clipboardWrite(text);
+      return;
+    }
+    if (cmd === 'paste') { void pasteIntoInput(input); return; }
+    if (cmd === 'select-all') { input.select(); return; }
+  }
+
+  const p = activePane();
+  switch (cmd) {
+    case 'new-terminal': void addTerminal(); break;
+    case 'new-terminal-folder': void openFolderTerminal(); break;
+    case 'new-page': openPageDialog(); break;
+    case 'close-tile': if (activeId) closePane(activeId); break;
+    case 'copy': if (p && !copyFrom(p)) toast('Nothing selected to copy.'); break;
+    case 'paste': if (p) void pasteInto(p); break;
+    case 'select-all': if (p?.term) p.term.selectAll(); else p?.view?.selectAll(); break;
+    case 'clear': p?.term?.clear(); break;
+    case 'zoom-tile': toggleSolo(); break;
+    case 'next-tile': step(1); break;
+    case 'prev-tile': step(-1); break;
+    case 'font-bigger': setFontSize(settings.fontSize + 1); break;
+    case 'font-smaller': setFontSize(settings.fontSize - 1); break;
+    case 'font-reset': setFontSize(DEFAULTS.fontSize); break;
+    case 'mode-stage': setMode('stage'); break;
+    case 'mode-equal': setMode('equal'); break;
+    case 'mode-grow': setMode('grow'); break;
+    case 'mode-solo': setMode('solo'); break;
+  }
+});
+
+// Only the chords the menu cannot own live here. Everything the shell needs —
+// every bare Ctrl chord on Windows and Linux — is deliberately left alone.
 window.addEventListener(
   'keydown',
   (e) => {
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (!mod) {
-      if (e.key === 'Escape' && settings.mode === 'solo') {
+    // While the dialog is up it owns the keyboard, Escape included.
+    if (pageDialog.open) return;
+
+    if (e.key === 'Escape' && settings.mode === 'solo') {
+      e.preventDefault();
+      toggleSolo();
+      return;
+    }
+
+    // Jump to a tile. Cmd on macOS, where the terminal never sees it; Alt
+    // elsewhere, where Ctrl+digit is the shell's.
+    const jump = isMac ? e.metaKey && !e.ctrlKey && !e.altKey : e.altKey && !e.ctrlKey && !e.metaKey;
+    if (jump && e.key >= '1' && e.key <= '9') {
+      const target = panes[Number(e.key) - 1];
+      if (target) {
+        // Capture-phase stopPropagation, or xterm still sends Alt+digit as a
+        // meta escape to the shell.
         e.preventDefault();
-        toggleSolo();
+        e.stopPropagation();
+        setActive(target.id);
       }
       return;
     }
-    const k = e.key.toLowerCase();
-    if (k === 't') { e.preventDefault(); void addTerminal(); }
-    else if (k === 'w') { e.preventDefault(); if (activeId) closePane(activeId); }
-    else if (e.key === 'Enter') { e.preventDefault(); toggleSolo(); }
-    else if (k >= '1' && k <= '9') {
-      const i = Number(k) - 1;
-      if (panes[i]) { e.preventDefault(); setActive(panes[i].id); }
+
+    // Cmd+= is what people actually press for "bigger"; the menu owns Cmd+Plus.
+    if ((isMac ? e.metaKey : e.ctrlKey) && e.shiftKey === false && e.key === '=') {
+      e.preventDefault();
+      e.stopPropagation();
+      setFontSize(settings.fontSize + 1);
     }
   },
   true,
 );
+
+// A drop that lands outside a tile would otherwise navigate the window to the
+// dropped file, replacing the app and killing every shell in it.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
 
 window.addEventListener('resize', () => {
   for (const p of panes) {
@@ -653,11 +999,19 @@ function paneText(p: Pane): string {
 (window as unknown as { __claufySmoke: () => Promise<unknown> }).__claufySmoke = async () => {
   const settle = () => new Promise((r) => setTimeout(r, 260));
 
+  // Where the run got to. The main process reads this if the run never
+  // returns, so a hang names the step it hung on instead of printing nothing.
+  const stage = (name: string) => {
+    (window as unknown as { __claufyStage: string }).__claufyStage = name;
+  };
+
+  stage('terminals');
   await addTerminal();
   await addTerminal();
   await addTerminal();
   await settle();
 
+  stage('modes');
   const shape = gridShape(panes.length);
   const seen: Record<string, { cols: string; rows: string }> = {};
 
@@ -761,8 +1115,48 @@ function paneText(p: Pane): string {
     scopeProbe = paneText(p).split('\n').map((l) => l.trim()).filter(Boolean).slice(-8);
   }
 
+  // --- clipboard ---------------------------------------------------------
+  // Select what the shell printed, copy it the way the Copy menu item does,
+  // and read it back off the real system clipboard. This is the whole point of
+  // the parity work: the old menu ran Chromium's Copy, which copied nothing
+  // because a terminal's selection is not the document's.
+  stage('clipboard');
+  const clipBefore = await window.claufy.clipboardRead();
+  const target = panes.find((p) => p.term && gotData.has(p.id));
+  let copied = '';
+  if (target?.term) {
+    target.term.selectAll();
+    copyFrom(target);
+    copied = await window.claufy.clipboardRead();
+    target.term.clearSelection();
+  }
+
+  stage('paste');
+  const PASTE_PROBE = 'claufy-paste-probe';
+  window.claufy.clipboardWrite(PASTE_PROBE);
+  let pasteLanded = false;
+  if (target?.term) {
+    await pasteInto(target);
+    await settle();
+    pasteLanded = paneText(target).includes(PASTE_PROBE);
+    window.claufy.write(target.id, '\x15'); // Ctrl+U, clear the typed line
+  }
+  if (clipBefore) window.claufy.clipboardWrite(clipBefore);
+
+  stage('done');
   const fontFamily = '"JetBrainsMono NFP Thin"';
   return {
+    copyWorked: copied.trim().length > 0,
+    copyOfShellOutput: copied.trim().split('\n').slice(-1)[0]?.slice(0, 60) ?? '',
+    pasteWorked: pasteLanded,
+    quoting: {
+      plain: shellQuote('/tmp/x'),
+      spaced: shellQuote('/Users/me/git pop'),
+      quoted: shellQuote("/tmp/it's here"),
+    },
+    // A 20-column line holding a URL that starts mid-row and wraps onto the
+    // next one, so the offset-to-row mapping is exercised rather than assumed.
+    links: findLinks('see https://ex.co/abc, and www.b.io'.padEnd(40, ' '), 20, 4),
     scopeProbe,
     fontLoaded: document.fonts.check(`12px ${fontFamily}`),
     bodyFont: getComputedStyle(document.body).fontFamily.split(',')[0],
