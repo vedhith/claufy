@@ -15,10 +15,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { variants, svgFor } from '../prototypes/variants.mjs';
+// The live prototype set. Rounds one to three each replaced this import; the
+// shipped mark and the reviewed mark have to come from the same file or they
+// drift, which is the entire reason apply-icon exists.
+import { variantsB as variants } from '../prototypes/variants-b.mjs';
+// svgFor only wraps `.art` in an <svg>, so it works for any variant shape.
+import { svgFor } from '../prototypes/variants.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pick = Number(process.argv[2] ?? 6);
+const pick = Number(process.argv[2] ?? 1);
 
 if (!Number.isInteger(pick) || pick < 1 || pick > variants.length) {
   console.error(`Pick 1..${variants.length}`);

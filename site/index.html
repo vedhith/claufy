@@ -490,25 +490,40 @@
       // ---- the mark -----------------------------------------------------
       // Same 16x16 grid the app icon is drawn from. Cheaper than inlining
       // 12kB of <rect>, and it keeps the pixel grid visible in the source.
-      const CAT = [
-        '................', '.##..........##.', '.###........###.', '.####......####.',
-        '.##############.', '################', '################', '###oo######oo###',
-        '###oo######oo###', '################', '#######oo#######', '.##############.',
-        '.##############.', '..############..', '....########....', '................',
+      // A terminal window wearing cat ears: the shell prompt inside, the ears
+      // over the frame. This is variant #1 of prototypes/variants-b.mjs, the
+      // same rows assets/cat.svg is generated from — keep the two in step.
+      const MARK = [
+        '....#......#....',
+        '...#.#....#.#...',
+        '..#...#..#...#..',
+        '..############..',
+        '..#..........#..',
+        '..############..',
+        '..#.#........#..',
+        '..#..#.......#..',
+        '..#.#........#..',
+        '..#....#####.#..',
+        '..############..',
       ];
 
-      // Black cat on a white tile — the same variant the app icon is built from
-      // (prototypes/variants.mjs #1). Keep these two in step.
+      // 16 cells across the tile, which is what keeps a one-cell outline on a
+      // whole pixel: 1px per cell at 16px, 2px at 32, 4px at 64. OFF_Y is the
+      // generator's own vertical offset, hardcoded rather than recomputed —
+      // the generator centres a 13-row canvas, so deriving it from MARK's 11
+      // rows would land the mark a row lower than the shipped .icns.
+      const GRID = 16;
+      const OFF_Y = 2;
+
       function catSVG(px, ink = '#000', bg = '#fff') {
-        const cols = 16, cell = 512 / (cols + 2);
+        const cell = 512 / GRID;
         let r = '';
-        for (let y = 0; y < CAT.length; y++) {
-          for (let x = 0; x < cols; x++) {
-            const ch = CAT[y][x];
-            if (ch !== '#' && ch !== 'o') continue;
-            r += `<rect x="${((x + 1) * cell).toFixed(2)}" y="${((y + 1) * cell).toFixed(2)}" ` +
+        for (let y = 0; y < MARK.length; y++) {
+          for (let x = 0; x < GRID; x++) {
+            if (MARK[y][x] !== '#') continue;
+            r += `<rect x="${(x * cell).toFixed(2)}" y="${((y + OFF_Y) * cell).toFixed(2)}" ` +
                  `width="${(cell + 0.5).toFixed(2)}" height="${(cell + 0.5).toFixed(2)}" ` +
-                 `fill="${ch === '#' ? ink : bg}"/>`;
+                 `fill="${ink}"/>`;
           }
         }
         return `<svg width="${px}" height="${px}" viewBox="0 0 512 512" shape-rendering="crispEdges">` +
