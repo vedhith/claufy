@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://claufy.pages.dev">claufy.pages.dev</a> ·
-  <a href="https://github.com/kk-vp/claufy/releases/latest">Download</a> ·
+  <a href="https://github.com/vedhith/claufy/releases/latest">Download</a> ·
   MIT
 </p>
 
@@ -17,10 +17,10 @@
 
 | | |
 | --- | --- |
-| **macOS** (Apple Silicon) | [`Claufy-mac-arm64.dmg`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-mac-arm64.dmg) |
-| **macOS** (Intel) | [`Claufy-mac-x64.dmg`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-mac-x64.dmg) |
-| **Windows** | [`Claufy-win-x64.exe`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-win-x64.exe) |
-| **Linux** | [`Claufy-linux-x86_64.AppImage`](https://github.com/kk-vp/claufy/releases/latest/download/Claufy-linux-x86_64.AppImage) |
+| **macOS** (Apple Silicon) | [`Claufy-mac-arm64.dmg`](https://github.com/vedhith/claufy/releases/latest/download/Claufy-mac-arm64.dmg) |
+| **macOS** (Intel) | [`Claufy-mac-x64.dmg`](https://github.com/vedhith/claufy/releases/latest/download/Claufy-mac-x64.dmg) |
+| **Windows** | [`Claufy-win-x64.exe`](https://github.com/vedhith/claufy/releases/latest/download/Claufy-win-x64.exe) |
+| **Linux** | [`Claufy-linux-x86_64.AppImage`](https://github.com/vedhith/claufy/releases/latest/download/Claufy-linux-x86_64.AppImage) |
 
 The builds are **not code-signed** — a signing certificate costs money and this
 is free. Every OS therefore puts up a scare the first time:

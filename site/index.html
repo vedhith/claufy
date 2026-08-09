@@ -326,7 +326,7 @@
         <a class="ghost" href="#demo">Demo</a>
         <a class="ghost" href="#agents">Agent view</a>
         <a class="ghost" href="#download">Download</a>
-        <a class="ghost" href="https://github.com/kk-vp/claufy">GitHub</a>
+        <a class="ghost" href="https://github.com/vedhith/claufy">GitHub</a>
       </div>
     </nav>
 
@@ -461,7 +461,7 @@
       <div class="code">
         <button class="copy" id="copy">Copy</button>
         <div><span class="c"># or build it yourself</span></div>
-        <div>git clone https://github.com/kk-vp/claufy.git &amp;&amp; cd claufy</div>
+        <div>git clone https://github.com/vedhith/claufy.git &amp;&amp; cd claufy</div>
         <div>npm install &amp;&amp; npm start</div>
       </div>
     </section>
@@ -470,8 +470,8 @@
       <p style="margin: 0 0 6px">Claufy — tiles for the windows you actually work in.</p>
       <p style="margin: 0">
         Free and MIT-licensed ·
-        <a href="https://github.com/kk-vp/claufy">Source on GitHub</a> ·
-        <a href="https://github.com/kk-vp/claufy/issues">Report a bug</a>
+        <a href="https://github.com/vedhith/claufy">Source on GitHub</a> ·
+        <a href="https://github.com/vedhith/claufy/issues">Report a bug</a>
       </p>
     </footer>
 
@@ -707,7 +707,7 @@
       // /releases/latest/download/<name> always points at the newest release,
       // so these never need editing when a version ships. The filenames come
       // from artifactName in package.json and deliberately carry no version.
-      const REPO = 'https://github.com/kk-vp/claufy';
+      const REPO = 'https://github.com/vedhith/claufy';
       const DL = REPO + '/releases/latest/download/';
       const RELEASES = {
         mac: DL + 'Claufy-mac-arm64.dmg',
@@ -753,7 +753,7 @@
       });
 
       document.getElementById('copy').addEventListener('click', async () => {
-        const cmd = 'git clone https://github.com/kk-vp/claufy.git && cd claufy\nnpm install && npm start';
+        const cmd = 'git clone https://github.com/vedhith/claufy.git && cd claufy\nnpm install && npm start';
         try {
           await navigator.clipboard.writeText(cmd);
           toast('Copied.');

@@ -11,7 +11,7 @@ A cross-platform **Electron desktop app**. One window holding **tiles**. A tile 
 real terminal or a web page. Adding a tile re-spaces the rest; the tile you're
 working in **grows, animated**. Works on macOS, Windows and Linux.
 
-Repo: `~/Developer/claufy` → **https://github.com/kk-vp/claufy** (public, MIT),
+Repo: `~/Developer/claufy` → **https://github.com/vedhith/claufy** (public, MIT),
 branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 `claufy`, account `vedhithkrishnakumar@gmail.com`).
 
@@ -34,7 +34,7 @@ branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 | Packaged `.app` + installed to `~/Applications` | done, verified |
 | Spotlight finds it by typing "claufy" | done, verified |
 | Landing page with live demo | done, verified |
-| Public repo, MIT licence | done — github.com/kk-vp/claufy |
+| Public repo, MIT licence | done — github.com/vedhith/claufy |
 | CI release build (mac arm64 + x64, win, linux) | done, verified |
 | v0.1.0 release with 6 installers | done, verified |
 | Site live on Cloudflare Pages | done — claufy.pages.dev |
