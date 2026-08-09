@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+release/
+*.log
+.DS_Store
+
+# Generated from assets/cat.svg by `npm run icons`.
+assets/icon*.png

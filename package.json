@@ -1,0 +1,29 @@
+{
+  "name": "claufy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Every window you're working in, on one screen. Open terminals and pages as tiles that space themselves, and the one you're using grows.",
+  "main": "dist/main.js",
+  "scripts": {
+    "postinstall": "node scripts/fix-pty-perms.mjs",
+    "build": "node scripts/build.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "start": "npm run build && electron .",
+    "dev": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "rebuild": "electron-rebuild -f -w node-pty"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
+    "@types/node": "^22.10.0",
+    "electron": "^43.0.0",
+    "esbuild": "^0.24.0",
+    "sharp": "^0.33.5",
+    "typescript": "^5.7.0"
+  }
+}
