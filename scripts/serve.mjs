@@ -21,6 +21,7 @@ const server = createServer(async (req, res) => {
   let url = (req.url ?? '/').split('?')[0];
   if (url === '/') url = '/site/index.html';
   else if (url === '/prototypes' || url === '/prototypes/') url = '/prototypes/icons.html';
+  else if (url === '/prototypes/next' || url === '/next') url = '/prototypes/next.html';
   else if (!url.startsWith('/prototypes/') && !url.startsWith('/site/')) url = '/site' + url;
 
   const file = path.join(root, url);
