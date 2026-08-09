@@ -155,8 +155,31 @@ exercise Gatekeeper. The right-click → Open instruction on the site and in the
 README is the standard remedy for an unsigned app but has not been tested on a
 machine that downloaded it through a browser.
 
+### The repo moved accounts (2026-08-09)
+
+It was created on **`kk-vp`**, which is reserved for visionAnchor. `gh repo
+create` uses whatever account is *active* and kk-vp is the default, so nothing
+in the command revealed the wrong owner.
+
+It was **recreated** at `github.com/vedhith/claufy` rather than transferred: a
+GitHub transfer between two personal accounts cannot be completed by an agent
+(the receiving account must accept in the web UI — there is no API for it) and
+it would leave a permanent redirect from the old path anyway. Full history, both
+tags and both releases were rebuilt by CI under the new owner and verified.
+
+The old repo has had its releases deleted and is now private — `kk-vp/claufy`
+returns 404 — but it still exists. Deleting it needs the `delete_repo` scope,
+which requires an interactive `gh auth refresh`. See "Still open".
+
+A `PreToolUse` hook (`~/.claude/hooks/github-account-guard.py`) now blocks any
+create/push aimed at kk-vp from a non-visionAnchor project.
+
 **Still open:**
 
+0. **Delete `kk-vp/claufy`.** Two commands, needs a browser once:
+   `gh auth switch --user kk-vp && gh auth refresh -h github.com -s delete_repo`
+   then `gh repo delete kk-vp/claufy --yes`, then switch back with
+   `gh auth switch --user vedhithkrishnakumar-cell`.
 1. **Custom domain** — the user is buying one. Attach with
    `wrangler pages domain add <domain> --project-name claufy`, then point the
    DNS at Cloudflare. Update `homepage` in `package.json` and the README header.
