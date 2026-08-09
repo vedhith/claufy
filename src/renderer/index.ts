@@ -431,6 +431,16 @@ window.addEventListener('resize', () => {
 
 // --- smoke test ---------------------------------------------------------
 
+// Everything the terminal has painted, as plain text. Only used by the smoke
+// test, to read what a real shell actually replied.
+function paneText(p: Pane): string {
+  const b = p.term?.buffer.active;
+  if (!b) return '';
+  const out: string[] = [];
+  for (let i = 0; i < b.length; i++) out.push(b.getLine(i)?.translateToString(true) ?? '');
+  return out.join('\n');
+}
+
 // Exercised by CLAUFY_SMOKE from the main process. Drives the same functions
 // the UI does, so a pass means the real paths work, not a mock of them.
 (window as unknown as { __claufySmoke: () => Promise<unknown> }).__claufySmoke = async () => {
@@ -462,8 +472,24 @@ window.addEventListener('resize', () => {
     return { id: p.id, w: Math.round(r.width), h: Math.round(r.height) };
   });
 
+  // Scope probe: open a tile in a real folder and ask the shell inside it what
+  // `claude agents` resolves to. This is the only way to prove the ZDOTDIR
+  // wrapper survives the user's own rc.
+  let scopeProbe: string[] | null = null;
+  const probeDir = (window as unknown as { __claufyProbeDir?: string }).__claufyProbeDir;
+  if (probeDir) {
+    await addTerminal(
+      probeDir,
+      'echo "DIR=$CLAUFY_DIR"; echo "WRAPPED=$(functions claude | grep -c -- --cwd)"; echo "ISFUNC=$(type -w claude)"',
+    );
+    await new Promise((r) => setTimeout(r, 5000));
+    const p = panes[panes.length - 1];
+    scopeProbe = paneText(p).split('\n').map((l) => l.trim()).filter(Boolean).slice(-8);
+  }
+
   const fontFamily = '"JetBrainsMono NFP Thin"';
   return {
+    scopeProbe,
     fontLoaded: document.fonts.check(`12px ${fontFamily}`),
     bodyFont: getComputedStyle(document.body).fontFamily.split(',')[0],
     bg: getComputedStyle(document.body).backgroundColor,
@@ -480,7 +506,8 @@ window.addEventListener('resize', () => {
     activeIsBigger:
       sized.length > 1 && activeId
         ? (() => {
-            const a = sized.find((s) => s.id === activeId)!;
+            const a = sized.find((s) => s.id === activeId);
+            if (!a) return null; // probe opened a tile after this was measured
             const others = sized.filter((s) => s.id !== activeId);
             return others.every((o) => a.w * a.h >= o.w * o.h);
           })()

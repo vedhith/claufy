@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Claufy icon prototypes</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 28px 24px 60px;
+        background: #14161c;
+        color: #e6e8ee;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      .lede { color: #939aa8; margin: 0 0 26px; max-width: 70ch; }
+      .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+      .card {
+        background: #1b1e26;
+        border: 1px solid #2b3038;
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .card.pick { border-color: #67b5ed; box-shadow: 0 0 0 1px #67b5ed44; }
+      .hd { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+      .num {
+        font: 600 12px/1 ui-monospace, Menlo, monospace;
+        background: #2b3038; color: #cfd5df;
+        padding: 4px 7px; border-radius: 6px;
+      }
+      .name { font-weight: 600; }
+      .note { color: #939aa8; font-size: 12.5px; margin: 10px 0 0; }
+      .row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+      .sizes { display: flex; align-items: flex-end; gap: 12px; }
+      .s { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+      .s span { font: 10px ui-monospace, Menlo, monospace; color: #6f7787; }
+      /* The dock strip proves the mark still reads on a busy background. */
+      .dock {
+        margin-top: 14px; padding: 10px 14px; border-radius: 12px;
+        background: linear-gradient(120deg, #6d4b8f, #3b4a7a 60%, #244a55);
+        display: flex; align-items: center; gap: 12px;
+      }
+      .dock span { font-size: 11px; color: #ffffffbb; }
+      svg { display: block; }
+    </style>
+  </head>
+  <body>
+    <h1>Claufy icon prototypes</h1>
+    <p class="lede">
+      Pixel art on a real grid, flat fills, no outlines — one ink colour each, the way the Claude
+      mark works. Shown at the sizes that actually matter plus on a busy dock, because a pixel icon
+      lives or dies at 16px. Tell me a number.
+    </p>
+    <div class="grid" id="grid"></div>
+
+    <script type="module">
+      import { variants } from './variants.mjs';
+
+      const SIZES = [128, 64, 32, 16];
+      const grid = document.getElementById('grid');
+
+      variants.forEach((v, i) => {
+        const svg = (px) =>
+          `<svg width="${px}" height="${px}" viewBox="0 0 512 512" shape-rendering="crispEdges">${v.art}</svg>`;
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="hd"><span class="num">${i + 1}</span><span class="name">${v.name}</span></div>
+          <div class="row">
+            <div class="sizes">
+              ${SIZES.map((s) => `<div class="s">${svg(s)}<span>${s}</span></div>`).join('')}
+            </div>
+          </div>
+          <div class="dock">${svg(44)}${svg(28)}<span>on a busy background</span></div>
+          <p class="note">${v.note}</p>`;
+        grid.append(card);
+      });
+    </script>
+  </body>
+</html>

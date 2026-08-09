@@ -27,8 +27,9 @@
   --btn: #202836;
   --btn-hover: #29323f;
 
-  --cat: #ffffff;
-  --cat-ink: #000000;
+  /* the icon's own colours, so the mark in the bar matches the app icon */
+  --cat: #ffb3c7;
+  --cat-ink: #2a2135;
 
   --mono: "JetBrainsMono NFP Thin", "JetBrainsMono Nerd Font Propo",
           "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -71,17 +72,12 @@ body { display: flex; flex-direction: column; }
 
 .wordmark { font-weight: 400; letter-spacing: 0.4px; color: var(--ink); }
 
-.cat { width: 22px; height: 22px; }
-.cat.big { width: 76px; height: 76px; opacity: 0.9; }
+.cat { width: 24px; height: 24px; }
+.cat.big { width: 84px; height: 84px; opacity: 0.85; }
 
-/* White mass, black line — has to survive at 22px in the bar. */
-.cat-head, .cat-ear {
-  fill: var(--cat);
-  stroke: var(--cat-ink);
-  stroke-width: 2.6;
-  stroke-linejoin: round;
-}
-.cat-eye, .cat-nose { fill: var(--cat-ink); }
+/* The mark is a pixel sprite now — the rects carry their own fill, so there is
+   nothing to stroke. Kept crisp at every size. */
+.cat { shape-rendering: crispEdges; }
 
 .actions {
   display: flex;
