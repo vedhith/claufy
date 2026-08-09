@@ -1,0 +1,78 @@
+# Builds Claufy on all three OSes and attaches the installers to a release.
+#
+# Local builds only ever produce whatever the machine you are sitting at can
+# make — a Mac cannot build an .exe without wine, and Linux needs a container.
+# GitHub's runners have the real thing, so the release comes from here.
+#
+# Fires on a v* tag, or by hand from the Actions tab.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # one platform failing must not throw away the other two
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --mac --arm64 --x64
+          - os: windows-latest
+            args: --win --x64
+          - os: ubuntu-latest
+            args: --linux --x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # postinstall restores node-pty's spawn-helper execute bit
+      - run: npm ci
+
+      # the pngs are generated, not committed, so every platform needs this
+      - run: npm run build
+      - run: npm run icons
+
+      - name: Package
+        run: npx electron-builder ${{ matrix.args }} --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claufy-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - run: ls -lR artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          # the site links to /releases/latest/download/<name>, which only
+          # resolves once the release is out of draft
+          draft: false

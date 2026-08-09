@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "Every window you're working in, on one screen. Open terminals and pages as tiles that space themselves, and the one you're using grows.",
+  "license": "MIT",
+  "author": "Vedhith Krishnakumar",
+  "homepage": "https://claufy.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kk-vp/claufy.git"
+  },
   "main": "dist/main.js",
   "scripts": {
     "postinstall": "node scripts/fix-pty-perms.mjs",
@@ -13,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w node-pty",
     "dist": "npm run build && npm run icons && electron-builder --dir",
+    "dist:release": "npm run build && npm run icons && electron-builder",
     "install-app": "node scripts/install-app.mjs",
     "site": "node scripts/serve.mjs"
   },
@@ -22,6 +30,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "Claufy-${os}-${arch}.${ext}",
     "files": [
       "dist/**/*",
       "package.json"
@@ -33,7 +42,8 @@
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": [
-        "dir"
+        "dmg",
+        "zip"
       ]
     },
     "win": {

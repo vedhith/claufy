@@ -273,6 +273,12 @@
         border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; cursor: pointer;
       }
       .copy:hover { color: var(--ink); }
+      .fineprint {
+        color: var(--ink-dim); font-size: 12.5px; margin: 16px auto 0;
+        max-width: 62ch; min-height: 2.6em;
+      }
+      .fineprint strong { color: var(--ink); font-weight: 600; }
+      .fineprint code { font-size: 12px; }
 
       footer {
         border-top: 1px solid var(--line); margin-top: 40px; padding: 24px 0 40px;
@@ -320,6 +326,7 @@
         <a class="ghost" href="#demo">Demo</a>
         <a class="ghost" href="#agents">Agent view</a>
         <a class="ghost" href="#download">Download</a>
+        <a class="ghost" href="https://github.com/kk-vp/claufy">GitHub</a>
       </div>
     </nav>
 
@@ -449,16 +456,23 @@
         <button class="btn" data-os="linux">Linux</button>
       </div>
 
+      <p class="fineprint" id="fineprint"></p>
+
       <div class="code">
         <button class="copy" id="copy">Copy</button>
-        <div><span class="c"># build it yourself</span></div>
-        <div>git clone &lt;repo&gt; claufy &amp;&amp; cd claufy</div>
+        <div><span class="c"># or build it yourself</span></div>
+        <div>git clone https://github.com/kk-vp/claufy.git &amp;&amp; cd claufy</div>
         <div>npm install &amp;&amp; npm start</div>
       </div>
     </section>
 
     <footer>
-      Claufy — tiles for the windows you actually work in.
+      <p style="margin: 0 0 6px">Claufy — tiles for the windows you actually work in.</p>
+      <p style="margin: 0">
+        Free and MIT-licensed ·
+        <a href="https://github.com/kk-vp/claufy">Source on GitHub</a> ·
+        <a href="https://github.com/kk-vp/claufy/issues">Report a bug</a>
+      </p>
     </footer>
 
     <div id="toast" role="status"></div>
@@ -688,26 +702,53 @@
       }
 
       // ---- download -----------------------------------------------------
-      // No published builds yet, so say so rather than serve a dead link.
-      const RELEASES = null;
+      // /releases/latest/download/<name> always points at the newest release,
+      // so these never need editing when a version ships. The filenames come
+      // from artifactName in package.json and deliberately carry no version.
+      const REPO = 'https://github.com/kk-vp/claufy';
+      const DL = REPO + '/releases/latest/download/';
+      const RELEASES = {
+        mac: DL + 'Claufy-mac-arm64.dmg',
+        win: DL + 'Claufy-win-x64.exe',
+        linux: DL + 'Claufy-linux-x64.AppImage',
+      };
       const NAMES = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
+
+      // Unsigned builds: every OS puts up a scare on first launch, and a
+      // download page that doesn't warn you gets filed as a bug.
+      const FINEPRINT = {
+        mac:
+          `Apple Silicon build. <a href="${DL}Claufy-mac-x64.dmg">Intel Mac?</a> ` +
+          `Claufy isn't code-signed yet, so the first launch needs ` +
+          `<strong>right-click → Open</strong> rather than a double-click.`,
+        win:
+          `SmartScreen will warn on an unsigned app the first time — ` +
+          `<strong>More info → Run anyway</strong>.`,
+        linux:
+          `An AppImage: <code>chmod +x Claufy-linux-x64.AppImage</code> and run it. ` +
+          `No install, no root.`,
+      };
 
       const ua = navigator.userAgent;
       const myOS = /Mac/i.test(ua) ? 'mac' : /Win/i.test(ua) ? 'win' : 'linux';
       document.getElementById('get').textContent = 'Get Claufy for ' + NAMES[myOS];
 
+      const fineEl = document.getElementById('fineprint');
+      const setFine = (os) => { fineEl.innerHTML = FINEPRINT[os]; };
+      setFine(myOS);
+
       document.querySelectorAll('[data-os]').forEach((b) => {
         if (b.dataset.os === myOS) b.classList.add('primary');
         else b.classList.remove('primary');
+        b.addEventListener('mouseenter', () => setFine(b.dataset.os));
         b.addEventListener('click', () => {
-          if (RELEASES) { location.href = RELEASES[b.dataset.os]; return; }
-          toast('Builds are not published yet — grab the source below, it is two commands.');
-          document.querySelector('.code').scrollIntoView({ block: 'center' });
+          setFine(b.dataset.os);
+          location.href = RELEASES[b.dataset.os];
         });
       });
 
       document.getElementById('copy').addEventListener('click', async () => {
-        const cmd = 'git clone <repo> claufy && cd claufy\nnpm install && npm start';
+        const cmd = 'git clone https://github.com/kk-vp/claufy.git && cd claufy\nnpm install && npm start';
         try {
           await navigator.clipboard.writeText(cmd);
           toast('Copied.');
