@@ -15,7 +15,34 @@ app.whenReady().then(async () => {
     const settle = () => new Promise(r => setTimeout(r, 500));
     const read = () => ({ cols: g.style.gridTemplateColumns, rows: g.style.gridTemplateRows });
     const res = { tilesAtStart: g.children.length };
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    const boxes = () => [...g.children].map(box);
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+    // Stage is the default. The claim to check is not that it animates but
+    // that it TRADES: the tile you click takes the middle's exact box, the
+    // middle takes that tile's, and every other tile is left where it was.
+    res.stageDefault = read();
+    const before = boxes();
+    const mid = before.reduce((best, b, i) => (b.w * b.h > before[best].w * before[best].h ? i : best), 0);
+    const side = before.findIndex((_, i) => i !== mid);
+    g.children[side].click();
+    await settle(); await settle();
+    const after = boxes();
+    res.stageSwap = {
+      middle: mid, side,
+      sideTookMiddle: same(after[side], before[mid]),
+      middleTookSide: same(after[mid], before[side]),
+      restStayedPut: before.every((b, i) => i === mid || i === side ? true : same(after[i], b)),
+      allTilesVisible: after.every((b) => b.w > 0 && b.h > 0),
+      middleBox: before[mid], sideBox: before[side],
+    };
+
+    // the rest of the demo is the older grid modes
+    document.querySelector('[data-mode=grow]').click(); await settle();
     res.growDefault = read();
 
     // click the last tile -> it should become the hot track

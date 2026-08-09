@@ -6,7 +6,7 @@
     <title>Claufy — every window you're working in, on one screen</title>
     <meta
       name="description"
-      content="Claufy tiles your terminals — and any web app — in one window. The tile you're working in grows, and each one gets its own Claude agent view scoped to its folder instead of one shared list. macOS, Windows and Linux."
+      content="Claufy holds your terminals — and any web app — in one window. One at full size in the middle, the rest live down the sides; click a small one and the two trade places while nothing else moves. Every tile gets its own Claude agent view, scoped to its folder. macOS, Windows and Linux."
     />
     <style>
       /* Palette is the app's, which is Terminal.app "Clear Dark". Same surface
@@ -130,14 +130,26 @@
       .grid {
         display: grid; gap: 8px; padding: 8px;
         height: clamp(300px, 46vw, 430px);
+        /* Stage rail width. Lives here rather than in the script so a phone can
+           narrow it: at 390px two full-width rails would leave the middle tile
+           barely wider than them, which stops reading as "one big, some small". */
+        --rail: clamp(96px, 15%, 190px);
         transition: grid-template-columns 380ms var(--ease), grid-template-rows 380ms var(--ease);
       }
+      @media (max-width: 700px) { .grid { --rail: clamp(58px, 19%, 96px); } }
       .tile {
+        position: relative; /* so a tile in flight can sit above the still ones */
         min-width: 0; min-height: 0; overflow: hidden;
         background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
         display: flex; flex-direction: column; cursor: pointer;
         transition: border-color 200ms var(--ease), opacity 200ms var(--ease), background 200ms var(--ease);
       }
+      /* Stage: the middle tile is placed explicitly and the rails alternate around
+         it, so a swap moves two tiles and leaves every other one exactly where it
+         was. The flight is a translate plus a width/height change — never a scale,
+         which is what would resample a terminal and blur it. */
+      .grid.stage .tile.rail .tile-body { font-size: 11px; }
+      .grid.stage .tile.rail:hover { border-color: var(--accent); }
       .tile:hover { border-color: #465c6d; }
       .tile.on { border-color: var(--accent); background: #1e2531; }
       .tile.gone { opacity: 0; pointer-events: none; }
@@ -225,6 +237,9 @@
         list-style: none; padding: 0; margin: 24px 0 0;
         display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       }
+      /* The mode list carries a sentence each, so it wants two columns, not four. */
+      .modes { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+      .modes kbd { font-size: 10.5px; }
       .use li {
         border-left: 2px solid var(--line); padding: 1px 0 1px 13px;
         font-size: 13px; color: var(--ink-dim);
@@ -334,9 +349,9 @@
       <div id="mark-hero" style="margin-bottom: 22px"></div>
       <h1>Every window you're working in,<br /><span class="hl">on one screen.</span></h1>
       <p class="sub">
-        Claufy holds your terminals as tiles. Open another and they re-space themselves;
-        click one and it grows, because that's the one you're using. Web apps tile too —
-        and every tile gets its own Claude agent view, scoped to its folder.
+        One terminal at full size in the middle. The rest stay live down the sides.
+        Click a small one and the two trade places — nothing else on screen moves.
+        Web apps tile too, and every tile gets its own Claude agent view, scoped to its folder.
       </p>
       <div class="cta">
         <a class="btn primary" href="#download" id="get">Get Claufy</a>
@@ -348,17 +363,18 @@
       <p class="eyebrow">Live — no download</p>
       <h2>This is the whole idea</h2>
       <p class="lede">
-        Click any tile. Add a few. Switch the focus mode. This demo animates the same CSS grid
-        tracks the real app animates — which is why terminal text stays sharp instead of being
-        scaled and blurred.
+        Click any small tile. It flies to the middle, the big one drops into the slot it just
+        left, and <em>every other tile holds still</em> — no re-spacing, nothing to re-find.
+        Add a few, or try the other modes. This is the same code the app runs.
       </p>
 
       <div class="demo">
         <div class="demo-bar">
           <span class="lights"><i style="background:#df6c5a"></i><i style="background:#e5c872"></i><i style="background:#79be7e"></i></span>
           <div class="seg" role="group" aria-label="Focus mode">
+            <button data-mode="stage" aria-pressed="true">Stage</button>
+            <button data-mode="grow">Grow</button>
             <button data-mode="equal">Equal</button>
-            <button data-mode="grow" aria-pressed="true">Grow</button>
             <button data-mode="solo">Solo</button>
           </div>
           <span class="sp"></span>
@@ -368,8 +384,15 @@
         <div class="grid" id="grid"></div>
       </div>
       <p class="hintline">
-        Tip: press <kbd>1</kbd>–<kbd>9</kbd> to jump between tiles, or <kbd>Esc</kbd> to leave Solo.
+        Tip: press <kbd>1</kbd>–<kbd>9</kbd> to send a tile to the middle, or <kbd>Esc</kbd> to leave Solo.
       </p>
+
+      <ul class="use modes">
+        <li><strong>Stage — the default</strong>One at full size in the middle, the rest small down the sides. Click a small one and the two swap places.</li>
+        <li><strong>Grow</strong>Everything stays in one grid, and the tile you're working in takes more of it. The Size slider sets how much.</li>
+        <li><strong>Equal</strong>Every tile the same size, always. Nothing moves when you click.</li>
+        <li><strong>Solo</strong>The tile you're in fills the window and the rest collapse away. <kbd>Esc</kbd> brings them back.</li>
+      </ul>
     </section>
 
     <section class="wrap" id="agents">
@@ -398,7 +421,7 @@
       <ul class="use">
         <li><strong>One project per tile</strong>Four repos, four shells, four agent views — none of them showing each other's work.</li>
         <li><strong>See who needs you</strong>The agent view marks a session waiting for input. With a tile each, you spot it without switching windows.</li>
-        <li><strong>Long jobs stay visible</strong>A build, a training run, a <code>tail -f</code> keeps its own tile while you work in another.</li>
+        <li><strong>Long jobs stay visible</strong>A build, a training run, a <code>tail -f</code> keeps a live tile down the side while you work in the middle.</li>
         <li><strong>Pin what the shell produces</strong>Put localhost, a dashboard or the docs in a tile beside the terminal building it.</li>
       </ul>
     </section>
@@ -423,8 +446,9 @@
           <span class="tag">Sharp</span>
           <h3>Text never gets blurred</h3>
           <p>
-            Growing a tile animates the grid tracks, not the tile. Scaling a terminal would resample
-            it and turn the glyphs to mush; this re-lays-out instead, so text stays crisp every frame.
+            No tile is ever scaled. Growing one animates the grid tracks; swapping one is a plain
+            translate and a width change, so its text is clipped and revealed rather than resampled.
+            A scaled terminal turns its glyphs to mush — this one stays crisp on every frame.
           </p>
         </div>
         <div class="card">
@@ -552,8 +576,14 @@
       ];
 
       const grid = document.getElementById('grid');
-      let count = 4, active = 0, mode = 'grow', prevMode = 'grow';
+      let count = 4, active = 0, mode = 'stage', prevMode = 'stage';
+      // Stage only: slots[i] is where tile i sits. 0 is the middle, 1.. are the
+      // rails. A swap is two entries in here trading values; nothing else moves.
+      let slots = [];
       const RATIO = 2.2;
+      const RAIL = 'var(--rail)'; // set on .grid, narrowed by media query
+      const SWAP_MS = 380;
+      const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
       // Identical to the app: as square as possible, filling left to right.
       const shape = (n) => {
@@ -566,28 +596,79 @@
           mode === 'equal' || hot < 0 ? '1fr' : mode === 'solo' ? (i === hot ? '1fr' : '0fr') : i === hot ? RATIO + 'fr' : '1fr',
         ).join(' ');
 
+      // The tile you're in takes the middle; the rest keep their order behind it.
+      function resetSlots() {
+        let next = 1;
+        slots = Array.from({ length: count }, (_, i) => (i === active ? 0 : next++));
+      }
+
       function render() {
         grid.innerHTML = '';
         for (let i = 0; i < count; i++) {
           const s = SAMPLES[i % SAMPLES.length];
           const el = document.createElement('div');
-          el.className = 'tile' + (i === active ? ' on' : '');
+          el.className = 'tile';
           el.innerHTML =
             `<div class="tile-head"><span class="dot"></span><span>${s.t}</span></div>` +
             `<div class="tile-body">` +
             s.lines.map((l) => `<div class="${l[0]}">${l[1]}</div>`).join('') +
-            (i === active ? '<div><span class="caret"></span></div>' : '') +
             `</div>`;
-          el.addEventListener('click', () => { active = i; layout(); });
+          el.addEventListener('click', () => pick(i));
           grid.append(el);
         }
+        resetSlots();
         layout();
       }
 
+      // Rails alternate right, left, right, left, so the middle tile stays as
+      // close to the centre as the count allows.
+      const railOf = (slot) => ({ right: slot % 2 === 1, row: Math.floor((slot - 1) / 2) });
+
+      function layoutStage() {
+        grid.classList.add('stage');
+        const sides = count - 1;
+        const right = Math.ceil(sides / 2), left = Math.floor(sides / 2);
+        // Only a rail with something in it gets a column — an empty one is a
+        // stripe of background and a stray gap, which reads as a bug.
+        let lc = 0, sc = 1, rc = 0;
+        if (!sides) grid.style.gridTemplateColumns = '1fr';
+        else if (!left) { grid.style.gridTemplateColumns = `1fr ${RAIL}`; rc = 2; }
+        else { grid.style.gridTemplateColumns = `${RAIL} 1fr ${RAIL}`; lc = 1; sc = 2; rc = 3; }
+        grid.style.gridTemplateRows = `repeat(${Math.max(right, 1)}, 1fr)`;
+
+        [...grid.children].forEach((el, i) => {
+          const s = slots[i];
+          el.classList.toggle('rail', s !== 0);
+          if (s === 0) {
+            el.style.gridColumn = String(sc);
+            el.style.gridRow = '1 / -1';
+          } else {
+            const r = railOf(s);
+            // The last tile in a rail runs to the bottom, so a short rail fills
+            // its column instead of leaving a hole under it.
+            const last = r.row === (r.right ? right : left) - 1;
+            el.style.gridColumn = String(r.right ? rc : lc);
+            el.style.gridRow = `${r.row + 1} / ${last ? -1 : r.row + 2}`;
+          }
+        });
+      }
+
       function layout() {
+        if (mode === 'stage') { layoutStage(); marks(); return; }
+        grid.classList.remove('stage');
+        [...grid.children].forEach((el) => {
+          el.style.gridColumn = '';
+          el.style.gridRow = '';
+          el.classList.remove('rail');
+        });
         const { cols, rows } = shape(count);
         grid.style.gridTemplateColumns = tracks(cols, active % cols);
         grid.style.gridTemplateRows = tracks(rows, Math.floor(active / cols));
+        marks();
+      }
+
+      // Which tile you're in, drawn: the border, and a caret blinking in it.
+      function marks() {
         [...grid.children].forEach((el, i) => {
           el.classList.toggle('on', i === active);
           el.classList.toggle('gone', mode === 'solo' && i !== active);
@@ -600,24 +681,69 @@
         document.getElementById('rm').disabled = count <= 1;
       }
 
-      document.querySelectorAll('.seg button').forEach((b) => {
-        b.addEventListener('click', () => {
-          mode = b.dataset.mode;
-          if (mode !== 'solo') prevMode = mode;
-          document.querySelectorAll('.seg button').forEach((o) =>
-            o.setAttribute('aria-pressed', String(o === b)),
-          );
-          layout();
-        });
-      });
+      // A tile mid-flight, so a second click cancels the first rather than
+      // stacking two animations on one element.
+      const flights = new WeakMap();
+      const still = matchMedia('(prefers-reduced-motion: reduce)');
+
+      // Carry a tile from where it was to where it now is. Width and height
+      // animate and a plain translate moves it — nothing is ever scaled, which
+      // is exactly what the app does, and why its terminals never blur.
+      function slide(el, from) {
+        const to = el.getBoundingClientRect();
+        const dx = from.left - to.left, dy = from.top - to.top;
+        if (!dx && !dy && from.width === to.width && from.height === to.height) return;
+        el.style.zIndex = '3';
+        const anim = el.animate(
+          [
+            { transform: `translate(${dx}px, ${dy}px)`, width: from.width + 'px', height: from.height + 'px' },
+            { transform: 'none', width: to.width + 'px', height: to.height + 'px' },
+          ],
+          { duration: SWAP_MS, easing: EASE },
+        );
+        flights.set(el, anim);
+        const done = () => { if (flights.get(el) === anim) { flights.delete(el); el.style.zIndex = ''; } };
+        anim.finished.then(done, done); // cancel() rejects; both endings clean up
+      }
+
+      // Stage's only move: the tile you picked and the tile in the middle trade
+      // places. Every other tile is left untouched, which is the whole point.
+      function pick(i) {
+        if (mode !== 'stage') { active = i; layout(); return; }
+        const c = slots.indexOf(0);
+        if (c === i) { active = i; marks(); return; }
+        const a = grid.children[c], b = grid.children[i];
+        const fly = !still.matches;
+        // Measured live, so clicking mid-swap flies on from where the tile
+        // actually is instead of snapping back first.
+        const from = fly ? [a.getBoundingClientRect(), b.getBoundingClientRect()] : null;
+        if (fly) {
+          for (const el of [a, b]) {
+            const f = flights.get(el);
+            if (f) { f.cancel(); flights.delete(el); }
+          }
+        }
+        slots[c] = slots[i];
+        slots[i] = 0;
+        active = i;
+        layout();
+        if (from) { slide(a, from[0]); slide(b, from[1]); }
+      }
 
       const setMode = (m) => {
         mode = m;
+        if (m !== 'solo') prevMode = m;
         document.querySelectorAll('.seg button').forEach((o) =>
           o.setAttribute('aria-pressed', String(o.dataset.mode === m)),
         );
+        // Coming into Stage, the tile you were in is the one you meant to watch.
+        if (m === 'stage') resetSlots();
         layout();
       };
+
+      document.querySelectorAll('.seg button').forEach((b) => {
+        b.addEventListener('click', () => setMode(b.dataset.mode));
+      });
 
       document.getElementById('add').addEventListener('click', () => {
         if (count >= 9) return;
@@ -631,7 +757,7 @@
       addEventListener('keydown', (e) => {
         if (e.key >= '1' && e.key <= '9') {
           const i = +e.key - 1;
-          if (i < count) { active = i; layout(); }
+          if (i < count) pick(i);
         } else if (e.key === 'Escape' && mode === 'solo') {
           setMode(prevMode);
         }

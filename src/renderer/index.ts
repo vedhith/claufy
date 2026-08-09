@@ -4,7 +4,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 
-type Mode = 'equal' | 'grow' | 'solo';
+type Mode = 'stage' | 'equal' | 'grow' | 'solo';
 
 type Pane = {
   id: string;
@@ -12,6 +12,9 @@ type Pane = {
   title: string;
   el: HTMLDivElement;
   body: HTMLDivElement;
+  // Stage mode only: 0 is the centre, 1..n-1 are the side rails. A swap is two
+  // panes exchanging this number; nothing else in the layout moves.
+  slot: number;
   term?: Terminal;
   fit?: FitAddon;
   dead?: boolean;
@@ -92,14 +95,15 @@ const TERM_THEME = {
 // --- settings -----------------------------------------------------------
 
 type Settings = { mode: Mode; ratio: number };
-const DEFAULTS: Settings = { mode: 'grow', ratio: 2.2 };
+const DEFAULTS: Settings = { mode: 'stage', ratio: 2.2 };
+const MODES: Mode[] = ['stage', 'equal', 'grow', 'solo'];
 
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem('claufy:settings');
     if (!raw) return { ...DEFAULTS };
     const s = JSON.parse(raw) as Partial<Settings>;
-    const mode: Mode = s.mode === 'equal' || s.mode === 'grow' || s.mode === 'solo' ? s.mode : DEFAULTS.mode;
+    const mode: Mode = MODES.includes(s.mode as Mode) ? (s.mode as Mode) : DEFAULTS.mode;
     const ratio = typeof s.ratio === 'number' && s.ratio >= 1 && s.ratio <= 6 ? s.ratio : DEFAULTS.ratio;
     return { mode, ratio };
   } catch {
@@ -121,6 +125,7 @@ modeSel.addEventListener('change', () => {
   settings.mode = modeSel.value as Mode;
   sizeWrap.style.visibility = settings.mode === 'grow' ? 'visible' : 'hidden';
   saveSettings();
+  stageTheActive();
   layout();
 });
 
@@ -150,13 +155,163 @@ function tracks(count: number, hot: number, mode: Mode, ratio: number): string {
   return out.join(' ');
 }
 
+// --- stage mode ---------------------------------------------------------
+
+// One tile at full size in the middle, the rest small down the sides — still
+// live, still readable. Picking a small one does not re-space the window the
+// way Grow does: the two tiles trade places and nothing else moves.
+
+// How wide a rail is. A percentage alone goes unusable on a small window and a
+// fixed width eats half a big one, so it is clamped at both ends.
+const RAIL = 'clamp(128px, 17%, 240px)';
+
+const SWAP_MS = 380;
+const SWAP_EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+// Rail slots alternate right, left, right, left, so the stage sits as near the
+// middle as the count allows: two tiles hang one rail off the right, three
+// balance it, and it stays balanced from there.
+function railOf(slot: number): { right: boolean; row: number } {
+  return { right: slot % 2 === 1, row: Math.floor((slot - 1) / 2) };
+}
+
+// Slots have to stay a dense 0..n-1 after a close, and whoever was nearest the
+// centre inherits the stage.
+function normalizeSlots() {
+  [...panes].sort((a, b) => a.slot - b.slot).forEach((p, i) => { p.slot = i; });
+}
+
+// Entering Stage from another mode: the tile you were in is the one you meant
+// to be looking at, so it takes the centre.
+function stageTheActive() {
+  if (settings.mode !== 'stage' || !activeId) return;
+  const p = panes.find((x) => x.id === activeId);
+  const st = panes.find((x) => x.slot === 0);
+  if (p && st && p !== st) { st.slot = p.slot; p.slot = 0; }
+}
+
+function layoutStage() {
+  const sides = panes.length - 1;
+  const rightCount = Math.ceil(sides / 2);
+  const leftCount = Math.floor(sides / 2);
+  const rows = Math.max(rightCount, 1);
+
+  // Only the rails that hold something get a column. An empty one would be a
+  // stripe of background plus a gap, which reads as a bug rather than a rail.
+  let leftCol = 0;
+  let stageCol = 1;
+  let rightCol = 0;
+  if (sides === 0) {
+    grid.style.gridTemplateColumns = '1fr';
+  } else if (leftCount === 0) {
+    grid.style.gridTemplateColumns = `1fr ${RAIL}`;
+    rightCol = 2;
+  } else {
+    grid.style.gridTemplateColumns = `${RAIL} 1fr ${RAIL}`;
+    leftCol = 1;
+    stageCol = 2;
+    rightCol = 3;
+  }
+  grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+  for (const p of panes) {
+    p.el.classList.toggle('active', p.id === activeId);
+    p.el.classList.remove('collapsed');
+    p.el.classList.toggle('rail', p.slot !== 0);
+    if (p.slot === 0) {
+      p.el.style.gridColumn = String(stageCol);
+      p.el.style.gridRow = '1 / -1';
+    } else {
+      const { right, row } = railOf(p.slot);
+      // The last tile in a rail runs to the bottom, so a short rail fills its
+      // column instead of leaving a hole under it.
+      const last = row === (right ? rightCount : leftCount) - 1;
+      p.el.style.gridColumn = String(right ? rightCol : leftCol);
+      p.el.style.gridRow = `${row + 1} / ${last ? '-1' : String(row + 2)}`;
+    }
+  }
+}
+
+// A tile mid-flight. Kept so a second click can cancel the first rather than
+// stacking two animations on one element.
+const flights = new WeakMap<HTMLElement, Animation>();
+
+function stopFlight(el: HTMLElement) {
+  const a = flights.get(el);
+  if (a) { a.cancel(); flights.delete(el); }
+}
+
+// Carry a tile from where it was to where it now is. Width and height animate
+// and a plain translate moves it — nothing is ever scaled, because a scaled
+// terminal is a resampled one and the glyphs turn to mush. The content is
+// clipped and revealed instead, which stays sharp at every frame.
+function slide(el: HTMLElement, from: DOMRect) {
+  const to = el.getBoundingClientRect();
+  const dx = from.left - to.left;
+  const dy = from.top - to.top;
+  if (!dx && !dy && from.width === to.width && from.height === to.height) return;
+
+  el.style.zIndex = '3';
+  const anim = el.animate(
+    [
+      { transform: `translate(${dx}px, ${dy}px)`, width: `${from.width}px`, height: `${from.height}px` },
+      { transform: 'none', width: `${to.width}px`, height: `${to.height}px` },
+    ],
+    { duration: SWAP_MS, easing: SWAP_EASE },
+  );
+  flights.set(el, anim);
+  const done = () => {
+    if (flights.get(el) === anim) { flights.delete(el); el.style.zIndex = ''; }
+  };
+  // cancel() rejects this promise; both endings clean up the same way.
+  anim.finished.then(done, done);
+}
+
+function swapWithStage(p: Pane, animate: boolean) {
+  const st = panes.find((x) => x.slot === 0);
+  if (!st || st === p) return;
+
+  const moving = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Measured live, so a click during a swap flies on from where the tile
+  // actually is rather than snapping back first.
+  const from = moving ? [st.el.getBoundingClientRect(), p.el.getBoundingClientRect()] : null;
+  if (moving) { stopFlight(st.el); stopFlight(p.el); }
+
+  const s = st.slot;
+  st.slot = p.slot;
+  p.slot = s;
+  activeId = p.id;
+  layout();
+
+  if (from) {
+    slide(st.el, from[0]);
+    slide(p.el, from[1]);
+  }
+  p.term?.focus();
+}
+
+// --- layout -------------------------------------------------------------
+
 function layout() {
   const n = panes.length;
   empty.classList.toggle('show', n === 0);
+  grid.classList.toggle('stage', settings.mode === 'stage');
   if (n === 0) {
     grid.style.gridTemplateColumns = '1fr';
     grid.style.gridTemplateRows = '1fr';
     return;
+  }
+
+  if (settings.mode === 'stage') {
+    layoutStage();
+    return;
+  }
+
+  // Every other mode is auto-flow, so the stage's explicit placement has to go.
+  for (const p of panes) {
+    p.el.style.gridColumn = '';
+    p.el.style.gridRow = '';
+    p.el.classList.remove('rail');
   }
 
   const { cols, rows } = gridShape(n);
@@ -175,12 +330,19 @@ function layout() {
   }
 }
 
-function setActive(id: string) {
+// `animate` is off for tiles that appear or disappear: the grid tracks are
+// already moving underneath them, so a flight measured against them lands wrong.
+function setActive(id: string, animate = true) {
+  const p = panes.find((x) => x.id === id);
+  if (!p) return;
+  if (settings.mode === 'stage' && p.slot !== 0) {
+    swapWithStage(p, animate);
+    return;
+  }
   if (activeId === id) return;
   activeId = id;
   layout();
-  const p = panes.find((x) => x.id === id);
-  p?.term?.focus();
+  p.term?.focus();
 }
 
 // --- panes --------------------------------------------------------------
@@ -216,9 +378,14 @@ function makePane(kind: Pane['kind'], title: string): Pane {
 
   el.append(head, body);
 
-  const pane: Pane = { id: `p${++seq}`, kind, title, el, body };
+  const pane: Pane = { id: `p${++seq}`, kind, title, el, body, slot: panes.length };
 
-  el.addEventListener('mousedown', () => setActive(pane.id));
+  // Not on the close button: promoting a tile you are in the act of closing
+  // would fly it to the centre and then delete it.
+  el.addEventListener('mousedown', (e) => {
+    if ((e.target as HTMLElement | null)?.closest('.pane-close')) return;
+    setActive(pane.id);
+  });
   // Double-clicking the header is the fast way to blow one tile up and back.
   head.addEventListener('dblclick', (e) => {
     e.preventDefault();
@@ -231,6 +398,12 @@ function makePane(kind: Pane['kind'], title: string): Pane {
   });
 
   panes.push(pane);
+  // A tile you just opened is the one you want to look at, so it lands on the
+  // stage and the tile it displaces takes the rail slot it would have had.
+  if (settings.mode === 'stage') {
+    const st = panes.find((x) => x.slot === 0 && x !== pane);
+    if (st) { st.slot = pane.slot; pane.slot = 0; }
+  }
   grid.append(el);
   return pane;
 }
@@ -246,7 +419,16 @@ function closePane(id: string) {
   }
   p.el.remove();
   panes.splice(i, 1);
-  if (activeId === id) activeId = panes.length ? panes[Math.min(i, panes.length - 1)].id : null;
+  normalizeSlots();
+  if (activeId === id) {
+    // In Stage the centre is never empty: whoever normalising moved into slot 0
+    // is the tile you are now looking at.
+    activeId = !panes.length
+      ? null
+      : settings.mode === 'stage'
+        ? panes.find((x) => x.slot === 0)!.id
+        : panes[Math.min(i, panes.length - 1)].id;
+  }
   layout();
   if (activeId) panes.find((x) => x.id === activeId)?.term?.focus();
 }
@@ -360,7 +542,7 @@ let modeBeforeSolo: Mode | null = null;
 
 function toggleSolo() {
   if (settings.mode === 'solo') {
-    settings.mode = modeBeforeSolo ?? 'grow';
+    settings.mode = modeBeforeSolo ?? DEFAULTS.mode;
     modeBeforeSolo = null;
   } else {
     modeBeforeSolo = settings.mode;
@@ -369,6 +551,7 @@ function toggleSolo() {
   modeSel.value = settings.mode;
   sizeWrap.style.visibility = settings.mode === 'grow' ? 'visible' : 'hidden';
   saveSettings();
+  stageTheActive();
   layout();
 }
 
@@ -454,7 +637,7 @@ function paneText(p: Pane): string {
   const shape = gridShape(panes.length);
   const seen: Record<string, { cols: string; rows: string }> = {};
 
-  for (const m of ['equal', 'grow', 'solo'] as Mode[]) {
+  for (const m of ['equal', 'grow', 'solo', 'stage'] as Mode[]) {
     settings.mode = m;
     layout();
     await settle();
@@ -463,6 +646,30 @@ function paneText(p: Pane): string {
       rows: grid.style.gridTemplateRows,
     };
   }
+
+  // Stage's promise is a trade, not a re-space: the tile you click must land on
+  // exactly the centre's box and the centre must land on exactly its old one.
+  // Measured, because "it animates" is not a claim you can eyeball into a log.
+  const box = (p: Pane) => {
+    const r = p.el.getBoundingClientRect();
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  };
+  const centre = panes.find((p) => p.slot === 0)!;
+  const rail = panes.find((p) => p.slot === 1)!;
+  const wasCentre = box(centre);
+  const wasRail = box(rail);
+  const others = panes.filter((p) => p !== centre && p !== rail).map(box);
+  setActive(rail.id);
+  await new Promise((r) => setTimeout(r, SWAP_MS + 320));
+  const stageSwap = {
+    railTookCentre: JSON.stringify(box(rail)) === JSON.stringify(wasCentre),
+    centreTookRail: JSON.stringify(box(centre)) === JSON.stringify(wasRail),
+    restStayedPut:
+      JSON.stringify(panes.filter((p) => p !== centre && p !== rail).map(box)) === JSON.stringify(others),
+    railsStayVisible: panes.every((p) => box(p).w > 0 && box(p).h > 0),
+    centre: wasCentre,
+    rail: wasRail,
+  };
 
   settings.mode = 'grow';
   layout();
@@ -498,6 +705,7 @@ function paneText(p: Pane): string {
     panes: panes.length,
     shape,
     templates: seen,
+    stageSwap,
     shellsProducedOutput: gotData.size,
     spawnErrors,
     dead: panes.filter((p) => p.dead).length,

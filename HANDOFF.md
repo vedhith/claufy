@@ -8,8 +8,10 @@ Read alongside `PLAN.md` (why decisions were made) and `README.md` (how to run i
 ## What Claufy is
 
 A cross-platform **Electron desktop app**. One window holding **tiles**. A tile is a
-real terminal or a web page. Adding a tile re-spaces the rest; the tile you're
-working in **grows, animated**. Works on macOS, Windows and Linux.
+real terminal or a web page. By default (**Stage** mode) one tile is at full size in
+the middle and the rest sit small down the rails either side, still live; clicking a
+small one makes the two **trade places, animated**, and moves nothing else. Works on
+macOS, Windows and Linux.
 
 Repo: `~/Developer/claufy` → **https://github.com/vedhith/claufy** (public, MIT),
 branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
@@ -28,6 +30,7 @@ branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 | Tiled terminals (real login shells) | done, verified |
 | Auto re-space when a tile is added | done, verified |
 | Focus modes Equal / Grow / Solo, animated | done, verified |
+| **Stage** — one in the middle, rails either side, click to swap | done, verified |
 | Theme copied from Terminal.app "Clear Dark" | done, verified |
 | Per-tile folder-scoped `claude agents` | done, verified |
 | Icon — pixel cat, **variant 6** (white cat on black tile) | done |
@@ -46,14 +49,24 @@ branch `main`. Site: **https://claufy.pages.dev** (Cloudflare Pages, project
 JSON, exits. Last good run:
 
 ```
-shells : 5 / 5      spawn errors: none
+shells : 4 / 4      spawn errors: none      dead: 0
 font   : True "JetBrainsMono NFP Thin"    bg: rgb(25, 29, 39)
 equal  : 1fr 1fr        grow: 1fr 2.2fr       solo: 0fr 1fr
+stage  : clamp(128px, 17%, 240px) 1fr clamp(128px, 17%, 240px) / repeat(2, 1fr)
+stage swap, 4 tiles, clicking the first rail tile:
+  centre was 928x842 @256,50      rail was 240x417 @1192,50
+  railTookCentre  true    <- the clicked tile landed on the centre's exact box
+  centreTookRail  true    <- and the centre landed on exactly the rail's
+  restStayedPut   true    <- every other tile ended where it started
+  railsStayVisible true   <- no tile collapsed to zero; the shells stay readable
 scope probe inside a tile on "git pop":
   DIR=/Users/vedhith/Developer/git pop
   WRAPPED=2               <- claude agents is wrapped with --cwd
   ISFUNC=claude: function
 ```
+
+The scope probe needs `CLAUFY_PROBE_DIR`; the run above without it reports
+`scopeProbe: null` and four panes rather than five.
 
 Add `CLAUFY_PROBE_DIR="/some/folder"` to run the scope probe.
 
@@ -67,8 +80,11 @@ The landing page is **built and verified** at `site/index.html`. Serve it with
 What it has, top to bottom:
 
 1. Hero with the pixel cat.
-2. **Live interactive demo** — animates the same `grid-template-*` tracks the app
-   animates (click a tile, add/remove tiles, Equal/Grow/Solo, keys 1-9 and Esc).
+2. **Live interactive demo** — opens in **Stage**, the app's default: click a small
+   tile and it trades places with the middle one while nothing else moves. The other
+   three modes animate the same `grid-template-*` tracks the app animates
+   (add/remove tiles, Grow/Equal/Solo, keys 1-9 and Esc). Under it, a four-item
+   list explaining what each mode does.
 3. **"Every project gets its own agent view"** — the section that carries the
    pitch. Two panels of the *same twelve agents*: Claude Code's machine-wide list
    on the left, four folder-scoped Claufy tiles on the right. Hover or tap a
@@ -88,8 +104,12 @@ Driven in a real browser via `npx electron scripts/check-site.cjs`, which clicks
 through the demo *and* the agent-view panels and prints what it measured:
 
 ```
-grow (default)   : 2.2fr 1fr
-after click last : 1fr 2.2fr
+stage (default)  : var(--rail) 1fr var(--rail) / repeat(2, 1fr)
+  middle 727x414 @336,904        side tile 159x203 @1072,904
+  sideTookMiddle true   middleTookSide true   restStayedPut true
+  allTilesVisible true
+grow             : 1fr 2.2fr
+after click last : 1fr 2.2fr (rows)
 tiles after +2   : 6 -> 1fr 1fr 2.2fr
 solo             : 0fr 0fr 1fr   (5 tiles collapsed)
 equal            : 1fr 1fr 1fr
@@ -104,7 +124,14 @@ os button        : Get Claufy for macOS
 Narrow-viewport check at 390x780: `document.scrollWidth` is 390 with **zero**
 elements past the right edge, cards and panels stack to one column, and the
 desktop hint shows. At 1400 the cards are `533px 533px` — a 2x2, not 3 + an
-orphan.
+orphan. Stage survives a phone: the rails narrow to `63px` against a `190px`
+middle (3x), and the swap still trades exactly, with every other tile untouched.
+
+The one console warning the checker prints is Electron's own *Insecure
+Content-Security-Policy* notice for a `file://` renderer. The **shipped** page
+emits the identical warning when loaded the same way, so it is the harness, not
+the page. Load both in one window and reuse it — a second `BrowserWindow` in
+that script dies with `ERR_FAILED` before it paints.
 
 Two small traps found while building that section, both fixed in the CSS:
 a `<button>` centres its content vertically, so the folder tiles needed
@@ -310,6 +337,18 @@ them will be overwritten.
 7. **The smoke test's `rects` are captured before the scope probe opens its
    tile**, so anything comparing against `activeId` must tolerate a miss. It
    threw `Cannot read properties of undefined (reading 'w')` once for this.
+
+8. **Stage places every tile explicitly, so leaving Stage has to unplace them.**
+   `grid-column` / `grid-row` are written as inline styles; the other three modes
+   are auto-flow and inherit the stale placement if it is not cleared. `layout()`
+   wipes both on every non-Stage pass — that is not tidiness, it is the fix.
+
+9. **A swap animates width/height, and that only works because no track is
+   `auto`.** A grid item with an animated width would otherwise resize its own
+   track and drag the whole layout with it. The tracks are `fr` and `clamp()`, so
+   the item is free to be any width inside its cell. The same rule is what keeps
+   the flight a translate rather than a scale, which is what keeps the terminal
+   sharp — see trap 2.
 
 ---
 

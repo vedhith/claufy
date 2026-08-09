@@ -157,6 +157,23 @@ input[type="range"] { width: 92px; accent-color: var(--accent); }
 /* A collapsed track still paints a sliver; fading it stops the flicker. */
 .pane.collapsed { opacity: 0; pointer-events: none; }
 
+/* --- stage mode -------------------------------------------------------
+   The centre tile is placed explicitly and the rails alternate around it, so
+   nothing here re-spaces: a swap is two tiles animating past each other while
+   every other tile holds still. The flight is a translate plus a width/height
+   change — never a scale, which would resample the terminal and blur it. */
+
+#grid.stage .pane.rail { cursor: pointer; }
+#grid.stage .pane.rail:hover { border-color: var(--ansi-brblack); }
+#grid.stage .pane.rail .pane-head { color: var(--ink-dim); }
+
+/* A rail tile is ~130px wide, so eight of them put eight ✕ on screen at the
+   edge of your vision. It fades out until you are actually pointing at one;
+   the space stays reserved either way, so nothing shifts on hover. */
+#grid.stage .pane.rail .pane-close { opacity: 0; transition: opacity 140ms var(--ease); }
+#grid.stage .pane.rail:hover .pane-close,
+#grid.stage .pane.rail .pane-close:focus-visible { opacity: 1; }
+
 .pane-head {
   flex: 0 0 auto;
   display: flex;

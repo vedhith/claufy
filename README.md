@@ -2,7 +2,8 @@
 
 <p align="center">
   Every window you're working in, on one screen.<br>
-  Tiles that space themselves — and the one you're using grows.
+  One at full size in the middle, the rest live down the sides —<br>
+  click a small one and the two trade places.
 </p>
 
 <p align="center">
@@ -35,8 +36,9 @@ Building from source skips all of that, and is two commands (see below).
 ---
 
 Claufy is a desktop app that holds your terminals (and web pages) as tiles.
-Open another one and everything re-spaces itself. Click a tile and it grows,
-smoothly, because you're working in it.
+One of them is at full size in the middle and the rest sit small down the sides,
+still running. Click a small one and the two swap places — nothing else on
+screen moves.
 
 It is not a window manager and it does not take over your OS. It is one app
 window with tiles inside, so it works the same on **macOS, Windows and Linux**.
@@ -76,24 +78,36 @@ the top of `src/renderer/styles.css`.
 | `Cmd/Ctrl` + `T` | New terminal tile |
 | `Cmd/Ctrl` + `W` | Close the active tile |
 | `Cmd/Ctrl` + `Enter` | Blow the active tile up to fill the window, and back |
-| `Cmd/Ctrl` + `1…9` | Jump to a tile |
+| `Cmd/Ctrl` + `1…9` | Jump to a tile — in Stage, swap it into the middle |
 | `Esc` | Leave full-window mode |
 | Double-click a tile's header | Same as `Cmd/Ctrl` + `Enter` |
 
-## The three focus modes
+## The four focus modes
 
 Set this in the top bar. It is remembered.
 
 | Mode | What happens when you click a tile |
 | --- | --- |
-| **Equal** | Nothing — every tile stays the same size |
+| **Stage** *(default)* | It trades places with the tile in the middle. Nothing else moves |
 | **Grow** | Its row and column expand; **Size** sets how much |
+| **Equal** | Nothing — every tile stays the same size |
 | **Solo** | It takes the whole window, the others collapse away |
 
-All three animate, because the layout is one CSS Grid and the sizes live in
-`grid-template-columns` / `grid-template-rows`. Chromium interpolates those, so
-the browser animates the tracks for us. Nothing is transformed or scaled, which
-matters: scaling a terminal would blur the text.
+Grow, Equal and Solo animate the grid tracks: the sizes live in
+`grid-template-columns` / `grid-template-rows` and Chromium interpolates those,
+so the browser animates them for us.
+
+**Stage** is the odd one out and the reason the app is worth using. One tile
+sits at full size in the middle; the rest are small down the rails either side,
+still running, still readable. Click a small one and exactly two tiles move —
+the one you picked flies to the middle, the middle one drops into the slot it
+came from. Everything else stays where you left it, so you never have to
+re-find anything.
+
+Nothing is ever transformed by scale, in any mode. A swap animates the tile's
+width and height and slides it with a plain translate, so its text is clipped
+and revealed rather than resampled. Scaling a terminal blurs the glyphs; this
+does not.
 
 ## What can be a tile
 
@@ -116,9 +130,11 @@ names neither the file nor the permission. `scripts/fix-pty-perms.mjs` runs on
 CLAUFY_SMOKE=1 npx electron .
 ```
 
-Boots the app, opens four terminals, drives all three focus modes, prints a
-JSON report and exits. It calls the same functions the buttons do, so a pass
-means the real paths work.
+Boots the app, opens four terminals, drives all four focus modes, performs a
+real Stage swap and measures the boxes either side of it, prints a JSON report
+and exits. It calls the same functions the buttons do, so a pass means the real
+paths work — `stageSwap.restStayedPut` is the claim that nothing but the two
+tiles moved.
 
 ## Layout
 

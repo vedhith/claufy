@@ -4,8 +4,10 @@ Why the thing is shaped the way it is. Written as decisions land, not after.
 
 ## What it is
 
-One desktop window holding tiles. Tiles are terminals or web pages. Adding one
-re-spaces the rest; the active one grows. Cross-platform by construction.
+One desktop window holding tiles. Tiles are terminals or web pages. By default
+one tile is at full size in the middle and the rest sit small down the sides,
+still live; picking a small one trades places with the middle. Cross-platform by
+construction.
 
 ## Built
 
@@ -14,7 +16,9 @@ re-spaces the rest; the active one grows. Cross-platform by construction.
 - Terminal tiles: `node-pty` + `xterm.js`, login shell so aliases and PATH match
   a real terminal.
 - Layout: one CSS Grid. Sizes live in `grid-template-columns` / `-rows`.
-- Three focus modes — Equal / Grow / Solo — persisted to `localStorage`.
+- Four focus modes — Stage / Grow / Equal / Solo — persisted to `localStorage`.
+- Stage: one tile in the middle, the rest in rails either side, and a swap that
+  moves exactly two tiles.
 - Page tiles via `<webview>`.
 - Cat icon, drawn as SVG, rasterised by `npm run icons`.
 - `CLAUFY_SMOKE=1` self-test that drives the real functions and prints JSON.
@@ -25,6 +29,35 @@ re-spaces the rest; the active one grows. Cross-platform by construction.
 the focused tile — blurs terminal text, because a scaled canvas is resampled.
 Animating `grid-template-*` re-lays-out instead, so glyphs stay crisp at every
 frame. Chromium interpolates `fr` values, so this is one property change.
+
+**Stage swaps two tiles; it never re-spaces the window.** Grow's cost is that
+every tile moves when you pick one, so after each switch you have to re-find the
+thing you were reading. Stage fixes the geometry instead: slot 0 is the middle,
+slots 1..n-1 are the rails, and picking a tile swaps two slot numbers. Two tiles
+fly, every other one is untouched — measured in the smoke test as
+`restStayedPut`, not eyeballed. This is also why Stage is the default: it is the
+mode that matches what the app is for, one project per tile with one of them
+under your hands.
+
+**The side tiles stay live. That is the difference from Solo.** Solo already
+collapses everything to `0fr` for when you want one thing and nothing else, and
+duplicating that would be a second answer to a question already answered. Stage
+exists for the other case — you want one big and you still want to see the build
+finish. So a rail tile keeps a real shell, refits, and stays readable.
+
+**The flight is a translate plus a width/height change, never a scale.** The
+obvious FLIP is transform-only, which means scaling, which resamples the
+terminal canvas and blurs the glyphs for the whole animation — the same trap
+recorded below for Grow. Animating the frame's width and height instead clips
+and reveals the content, and a plain translate carries it across, so the text is
+sharp on every frame. Grid items take an animated width without disturbing the
+tracks, because the tracks are `fr` and `clamp()`, never `auto`.
+
+**Rails alternate right, left, right, left.** Filling one rail first would slide
+the middle tile sideways every time the count changed. Alternating keeps it
+centred from three tiles up; two tiles hang a single rail off the right, which is
+better than a centred stage with an empty column beside it that reads as a bug.
+The last tile in a short rail spans to the bottom so the column has no hole.
 
 **Solo mode is `0fr`, not `display:none`.** Hiding a tile cannot be animated and
 tears down the terminal's size. Collapsing the track animates, and the shell
@@ -63,6 +96,12 @@ by counting pixels: zero non-grey pixels, ~79% white.
 block claims resources it does not have, so `spctl` reports it as *broken*
 rather than merely unsigned. `codesign --sign -` costs nothing and avoids a
 class of Gatekeeper weirdness that would be miserable to debug later.
+
+**The demo on the page opens in Stage.** The page's job is to show the thing
+that is hard to describe, and "they trade places" is exactly that: a sentence
+about it sounds like every other tiling tool, one click of it does not. The
+demo runs the same slot maths and the same flight the app runs, so what the page
+shows is what arrives.
 
 **The landing page leads with the agent view, not the tiling.** Tiling is easy to
 copy and easy to dismiss — "so it's tmux". Per-folder agent scoping is the thing
@@ -104,3 +143,7 @@ so it earns its place on the page rather than living only in a README.
 - Should page tiles get back/forward/reload, or stay deliberately bare?
 - Does Solo want to remember the previous mode per tile, or globally? Currently
   global.
+- Should the rail width be a control rather than a `clamp()`? The **Size** slider
+  is Grow-only and idle in Stage, so it is sitting right there.
+- Should a rail tile be draggable to a different rail slot? The slot model would
+  take it; nothing else would have to change.
