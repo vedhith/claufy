@@ -1,0 +1,34 @@
+{
+  "name": "claufy",
+  "version": "0.1.0",
+  "description": "Terminal tiles — set up and launched from a terminal.",
+  "keywords": [
+    "terminal",
+    "electron",
+    "cli",
+    "tiles",
+    "pty"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "claufy": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/index.js && chmod +x dist/index.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}
