@@ -50,6 +50,11 @@ npm install     # also repairs node-pty's spawn-helper permissions
 npm start
 ```
 
+Claufy saves the open tile list and order as it changes. A normal relaunch
+restores terminal folders, page URLs, the active tile and the tile that occupied
+the middle Stage slot. Focus mode, Grow size and text size remain remembered as
+before.
+
 ## Install it (macOS)
 
 ```bash
@@ -165,6 +170,12 @@ real Stage swap and measures the boxes either side of it, prints a JSON report
 and exits. It calls the same functions the buttons do, so a pass means the real
 paths work — `stageSwap.restStayedPut` is the claim that nothing but the two
 tiles moved.
+
+The report also serializes and restores a real mixed terminal/page workspace,
+checks its order, URLs, working directories and Stage focus, and rejects
+malformed records. Smoke runs in a non-persistent in-memory Electron partition,
+so it neither reads nor changes the workspace or settings in the normal app
+profile.
 
 It also copies what a shell actually printed to the **real system clipboard**
 and reads it back, pastes a probe string in and finds it in the buffer, clicks

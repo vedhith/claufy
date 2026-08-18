@@ -18,6 +18,8 @@ type Pane = {
   term?: Terminal;
   fit?: FitAddon;
   view?: WebviewTag;
+  cwd?: string;
+  url?: string;
   dead?: boolean;
 };
 
@@ -33,7 +35,7 @@ declare global {
   interface Window {
     claufy: {
       ptyAvailable(): Promise<{ ok: boolean; error: string | null }>;
-      spawn(o: { id: string; cwd?: string; cols: number; rows: number; command?: string }): Promise<{ ok: boolean; error?: string }>;
+      spawn(o: { id: string; cwd?: string; cols: number; rows: number; command?: string }): Promise<{ ok: boolean; error?: string; cwd?: string }>;
       write(id: string, data: string): void;
       resize(id: string, cols: number, rows: number): void;
       kill(id: string): void;
@@ -141,6 +143,102 @@ function saveSettings() {
   try { localStorage.setItem('claufy:settings', JSON.stringify(settings)); } catch { /* private mode */ }
 }
 
+// --- workspace persistence ---------------------------------------------
+
+type WorkspaceTile =
+  | { kind: 'term'; cwd?: string }
+  | { kind: 'page'; url: string };
+
+type Workspace = {
+  version: 1;
+  tiles: WorkspaceTile[];
+  stageIndex: number;
+  activeIndex: number;
+};
+
+const WORKSPACE_KEY = 'claufy:workspace';
+const WORKSPACE_VERSION = 1;
+const MAX_WORKSPACE_TILES = 64;
+const MAX_WORKSPACE_VALUE = 32_768;
+let workspaceSavesPaused = 0;
+
+function validWorkspaceString(value: unknown): value is string {
+  return typeof value === 'string' &&
+    value.length <= MAX_WORKSPACE_VALUE &&
+    value.length > 0 &&
+    !value.includes('\0');
+}
+
+function parseWorkspace(raw: string | null): Workspace | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Record<string, unknown>;
+    if (candidate.version !== WORKSPACE_VERSION || !Array.isArray(candidate.tiles)) return null;
+    if (candidate.tiles.length > MAX_WORKSPACE_TILES) return null;
+
+    const tiles: WorkspaceTile[] = [];
+    for (const item of candidate.tiles) {
+      if (!item || typeof item !== 'object') return null;
+      const tile = item as Record<string, unknown>;
+      if (tile.kind === 'term') {
+        if (tile.cwd !== undefined && !validWorkspaceString(tile.cwd)) return null;
+        tiles.push(tile.cwd === undefined ? { kind: 'term' } : { kind: 'term', cwd: tile.cwd });
+      } else if (tile.kind === 'page') {
+        if (!validWorkspaceString(tile.url)) return null;
+        try { new URL(tile.url); } catch { return null; }
+        tiles.push({ kind: 'page', url: tile.url });
+      } else {
+        return null;
+      }
+    }
+
+    const stageIndex = candidate.stageIndex;
+    const activeIndex = candidate.activeIndex;
+    if (!Number.isInteger(stageIndex) || !Number.isInteger(activeIndex)) return null;
+    if (tiles.length === 0) {
+      if (stageIndex !== -1 || activeIndex !== -1) return null;
+    } else if (
+      (stageIndex as number) < 0 || (stageIndex as number) >= tiles.length ||
+      (activeIndex as number) < 0 || (activeIndex as number) >= tiles.length
+    ) {
+      return null;
+    }
+
+    return {
+      version: WORKSPACE_VERSION,
+      tiles,
+      stageIndex: stageIndex as number,
+      activeIndex: activeIndex as number,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function serializeWorkspace(): Workspace {
+  const stageIndex = panes.findIndex((pane) => pane.slot === 0);
+  const activeIndex = activeId ? panes.findIndex((pane) => pane.id === activeId) : -1;
+  return {
+    version: WORKSPACE_VERSION,
+    tiles: panes.map((pane): WorkspaceTile => pane.kind === 'term'
+      ? (pane.cwd ? { kind: 'term', cwd: pane.cwd } : { kind: 'term' })
+      : { kind: 'page', url: pane.url || 'about:blank' }),
+    stageIndex: panes.length ? Math.max(0, stageIndex) : -1,
+    activeIndex: panes.length ? Math.max(0, activeIndex) : -1,
+  };
+}
+
+function saveWorkspace() {
+  if (workspaceSavesPaused) return;
+  try { localStorage.setItem(WORKSPACE_KEY, JSON.stringify(serializeWorkspace())); } catch { /* private mode */ }
+}
+
+function loadWorkspace(): Workspace | null {
+  try { return parseWorkspace(localStorage.getItem(WORKSPACE_KEY)); } catch { return null; }
+}
+
 modeSel.value = settings.mode;
 ratioInput.value = String(settings.ratio);
 sizeWrap.style.visibility = settings.mode === 'grow' ? 'visible' : 'hidden';
@@ -151,6 +249,7 @@ modeSel.addEventListener('change', () => {
   saveSettings();
   stageTheActive();
   layout();
+  saveWorkspace();
 });
 
 ratioInput.addEventListener('input', () => {
@@ -320,6 +419,7 @@ function swapWithStage(p: Pane) {
   p.slot = s;
   activeId = p.id;
   layout();
+  saveWorkspace();
 
   if (from) {
     slide(st.el, from[0]);
@@ -381,6 +481,7 @@ function setActive(id: string) {
   if (activeId === id) return;
   activeId = id;
   layout();
+  saveWorkspace();
   p.term?.focus();
 }
 
@@ -487,6 +588,7 @@ function closePane(id: string) {
         : panes[Math.min(i, panes.length - 1)].id;
   }
   layout();
+  saveWorkspace();
   focusPane(activePane());
 }
 
@@ -670,9 +772,14 @@ function wireTerminalInput(pane: Pane, term: Terminal, host: HTMLElement) {
   });
 }
 
-async function addTerminal(cwd?: string, command?: string) {
+async function addTerminal(cwd?: string, command?: string): Promise<Pane> {
+  let requestedCwd = cwd;
+  if (!requestedCwd) {
+    try { requestedCwd = await window.claufy.homedir(); } catch { /* main process unavailable */ }
+  }
   const title = cwd ? shortPath(cwd) : 'terminal';
   const pane = makePane('term', title);
+  pane.cwd = requestedCwd;
 
   if (!ptyOk) {
     const err = document.createElement('div');
@@ -684,7 +791,8 @@ async function addTerminal(cwd?: string, command?: string) {
     pane.body.append(err);
     setActive(pane.id);
     layout();
-    return;
+    saveWorkspace();
+    return pane;
   }
 
   const host = document.createElement('div');
@@ -725,7 +833,7 @@ async function addTerminal(cwd?: string, command?: string) {
 
   const res = await window.claufy.spawn({
     id: pane.id,
-    cwd,
+    cwd: requestedCwd,
     cols: term.cols,
     rows: term.rows,
     command,
@@ -736,7 +844,14 @@ async function addTerminal(cwd?: string, command?: string) {
     term.write(`\r\n\x1b[31mCould not start a shell: ${res.error ?? 'unknown'}\x1b[0m\r\n`);
     pane.dead = true;
     pane.el.classList.add('dead');
-    return;
+    saveWorkspace();
+    return pane;
+  }
+  pane.cwd = res.cwd ?? requestedCwd;
+  if (res.cwd && requestedCwd && res.cwd !== requestedCwd) {
+    pane.title = shortPath(res.cwd) || 'terminal';
+    const label = pane.el.querySelector('.pane-title');
+    if (label) label.textContent = pane.title;
   }
 
   window.claufy.onData(pane.id, (d) => { gotData.add(pane.id); term.write(d); });
@@ -766,24 +881,102 @@ async function addTerminal(cwd?: string, command?: string) {
 
   setActive(pane.id);
   term.focus();
+  saveWorkspace();
+  return pane;
 }
 
-function addPage(url: string) {
+function addPage(url: string): Pane | undefined {
   let target = url.trim();
-  if (!target) return;
+  if (!target) return undefined;
   if (!/^[a-z]+:\/\//i.test(target)) target = 'https://' + target;
 
   let host: string;
-  try { host = new URL(target).host; } catch { toast('That does not look like a URL.'); return; }
+  try { host = new URL(target).host; } catch { toast('That does not look like a URL.'); return undefined; }
 
   const pane = makePane('page', host);
+  pane.url = target;
   const view = document.createElement('webview') as WebviewTag;
   view.setAttribute('src', target);
   view.setAttribute('allowpopups', 'false');
+  const rememberUrl = (event: Event) => {
+    // A failed workspace restore removes its partially-created panes before
+    // saves resume. Ignore navigation events that arrive after that cleanup.
+    if (!panes.includes(pane)) return;
+    const next = (event as Event & { url?: unknown }).url;
+    if (!validWorkspaceString(next)) return;
+    try { new URL(next); } catch { return; }
+    pane.url = next;
+    saveWorkspace();
+  };
+  view.addEventListener('did-navigate', rememberUrl);
+  view.addEventListener('did-navigate-in-page', rememberUrl);
   pane.body.append(view);
   pane.view = view;
   setActive(pane.id);
   layout();
+  saveWorkspace();
+  return pane;
+}
+
+async function restoreWorkspace(workspace: Workspace) {
+  let originalRaw: string | null = null;
+  let originalRawRead = false;
+  try {
+    originalRaw = localStorage.getItem(WORKSPACE_KEY);
+    originalRawRead = true;
+  } catch { /* private mode */ }
+
+  let restoredSuccessfully = false;
+  workspaceSavesPaused++;
+  try {
+    for (const pane of [...panes]) closePane(pane.id);
+
+    const restored: Pane[] = [];
+    for (const tile of workspace.tiles) {
+      const pane = tile.kind === 'term'
+        ? await addTerminal(tile.cwd)
+        : addPage(tile.url);
+      if (pane) restored.push(pane);
+    }
+
+    // Pane order is the saved list order. Stage slots are derived from it: the
+    // focused pane takes slot 0 and every other pane keeps its relative order.
+    restored.forEach((pane, index) => { pane.slot = index; });
+    const staged = restored[workspace.stageIndex];
+    if (staged && workspace.stageIndex !== 0) {
+      restored[0].slot = workspace.stageIndex;
+      staged.slot = 0;
+    }
+    activeId = settings.mode === 'stage'
+      ? staged?.id ?? restored[0]?.id ?? null
+      : restored[workspace.activeIndex]?.id ?? staged?.id ?? restored[0]?.id ?? null;
+    layout();
+    focusPane(activePane());
+    restoredSuccessfully = true;
+  } catch (error) {
+    // Remove every partially-restored pane while persistence is still paused,
+    // then put back the exact record that existed before restoration began.
+    for (const pane of [...panes]) {
+      try { closePane(pane.id); } catch { /* force removal below */ }
+      const index = panes.findIndex((candidate) => candidate.id === pane.id);
+      if (index >= 0) {
+        panes.splice(index, 1);
+        try { pane.el.remove(); } catch { /* already detached */ }
+      }
+    }
+    activeId = null;
+    try { normalizeSlots(); layout(); } catch { /* preserve the original error */ }
+    if (originalRawRead) {
+      try {
+        if (originalRaw === null) localStorage.removeItem(WORKSPACE_KEY);
+        else localStorage.setItem(WORKSPACE_KEY, originalRaw);
+      } catch { /* private mode */ }
+    }
+    throw error;
+  } finally {
+    workspaceSavesPaused--;
+    if (restoredSuccessfully) saveWorkspace();
+  }
 }
 
 // --- solo toggle --------------------------------------------------------
@@ -803,6 +996,7 @@ function toggleSolo() {
   saveSettings();
   stageTheActive();
   layout();
+  saveWorkspace();
 }
 
 // --- chrome -------------------------------------------------------------
@@ -833,6 +1027,7 @@ function setMode(mode: Mode) {
   saveSettings();
   stageTheActive();
   layout();
+  saveWorkspace();
 }
 
 function step(delta: number) {
@@ -1143,6 +1338,109 @@ function paneText(p: Pane): string {
   }
   if (clipBefore) window.claufy.clipboardWrite(clipBefore);
 
+  // --- workspace persistence --------------------------------------------
+  // Serialize the real mixed workspace, replace every live pane through the
+  // same restore path boot uses, and confirm the Stage occupant and pane order
+  // survive. One terminal is deliberately pointed at a missing directory; the
+  // main process must fall back to home and return the actual cwd it used.
+  const reportActiveId = activeId;
+  const reportActiveIsBigger =
+    sized.length > 1 && reportActiveId
+      ? (() => {
+          const active = sized.find((item) => item.id === reportActiveId);
+          if (!active) return null; // the optional scope probe opened after sizing
+          return sized.filter((item) => item.id !== reportActiveId)
+            .every((other) => active.w * active.h >= other.w * other.h);
+        })()
+      : null;
+  stage('workspace');
+  settings.mode = 'stage';
+  modeSel.value = settings.mode;
+  stageTheActive();
+  layout();
+  const focusTarget = panes.find((pane) => pane.kind === 'page') ?? panes[0];
+  if (focusTarget) setActive(focusTarget.id);
+  await new Promise((r) => setTimeout(r, SWAP_MS + 200));
+
+  const beforeRestoreReport = {
+    panes: panes.length,
+    shellsProducedOutput: gotData.size,
+    dead: panes.filter((pane) => pane.dead).length,
+    titles: panes.map((pane) => pane.title),
+  };
+  const serialized = serializeWorkspace();
+  saveWorkspace();
+  const stored = loadWorkspace();
+  const malformedRejected = [
+    '{',
+    JSON.stringify({ ...serialized, version: 2 }),
+    JSON.stringify({ ...serialized, stageIndex: serialized.tiles.length + 1 }),
+    JSON.stringify({ ...serialized, tiles: [{ kind: 'term', cwd: 42 }] }),
+    JSON.stringify({ ...serialized, tiles: [{ kind: 'page', url: 'not a url' }] }),
+    JSON.stringify({
+      ...serialized,
+      tiles: Array.from({ length: MAX_WORKSPACE_TILES + 1 }, () => ({ kind: 'term' })),
+      stageIndex: 0,
+      activeIndex: 0,
+    }),
+    JSON.stringify({
+      ...serialized,
+      tiles: [{ kind: 'term', cwd: 'x'.repeat(MAX_WORKSPACE_VALUE + 1) }],
+      stageIndex: 0,
+      activeIndex: 0,
+    }),
+    JSON.stringify({
+      ...serialized,
+      tiles: [{ kind: 'page', url: `https://example.com/${'x'.repeat(MAX_WORKSPACE_VALUE)}` }],
+      stageIndex: 0,
+      activeIndex: 0,
+    }),
+  ].every((raw) => parseWorkspace(raw) === null);
+  const emptyAccepted = parseWorkspace(JSON.stringify({
+    version: WORKSPACE_VERSION,
+    tiles: [],
+    stageIndex: -1,
+    activeIndex: -1,
+  }))?.tiles.length === 0;
+
+  const toRestore = parseWorkspace(JSON.stringify(serialized));
+  const termIndex = toRestore?.tiles.findIndex((tile) => tile.kind === 'term') ?? -1;
+  const home = await window.claufy.homedir();
+  if (toRestore && termIndex >= 0) {
+    toRestore.tiles[termIndex] = {
+      kind: 'term',
+      cwd: isMac || isLinux
+        ? `/claufy-smoke-missing-${Date.now()}`
+        : `Z:\\claufy-smoke-missing-${Date.now()}`,
+    };
+  }
+  if (toRestore) await restoreWorkspace(toRestore);
+  await settle();
+  const restored = serializeWorkspace();
+  const restoredTerm = termIndex >= 0 ? restored.tiles[termIndex] : undefined;
+  const workspacePersistence = {
+    serializedVersion: serialized.version,
+    serializedKinds: serialized.tiles.map((tile) => tile.kind),
+    terminalCwdsPresent: serialized.tiles
+      .filter((tile): tile is Extract<WorkspaceTile, { kind: 'term' }> => tile.kind === 'term')
+      .every((tile) => typeof tile.cwd === 'string' && tile.cwd.length > 0),
+    pageUrlsPresent: serialized.tiles
+      .filter((tile): tile is Extract<WorkspaceTile, { kind: 'page' }> => tile.kind === 'page')
+      .every((tile) => tile.url.length > 0),
+    storageRoundTrip: JSON.stringify(stored) === JSON.stringify(serialized),
+    malformedRejected,
+    emptyAccepted,
+    orderRestored:
+      JSON.stringify(restored.tiles.map((tile) => tile.kind)) ===
+      JSON.stringify(serialized.tiles.map((tile) => tile.kind)),
+    pageUrlsRestored:
+      JSON.stringify(restored.tiles.filter((tile) => tile.kind === 'page')) ===
+      JSON.stringify(serialized.tiles.filter((tile) => tile.kind === 'page')),
+    stageRestored: restored.stageIndex === serialized.stageIndex,
+    activeRestored: restored.activeIndex === serialized.activeIndex,
+    staleCwdFellBack: restoredTerm?.kind === 'term' && restoredTerm.cwd === home,
+  };
+
   stage('done');
   const fontFamily = '"JetBrainsMono NFP Thin"';
   return {
@@ -1163,37 +1461,32 @@ function paneText(p: Pane): string {
     bg: getComputedStyle(document.body).backgroundColor,
     ptyOk,
     ptyErr,
-    panes: panes.length,
+    panes: beforeRestoreReport.panes,
     shape,
     templates: seen,
     stageSwap,
     stageAfterClose,
     stageAfterOpen,
     railPage,
-    shellsProducedOutput: gotData.size,
+    workspacePersistence,
+    shellsProducedOutput: beforeRestoreReport.shellsProducedOutput,
     spawnErrors,
-    dead: panes.filter((p) => p.dead).length,
-    titles: panes.map((p) => p.title),
+    dead: beforeRestoreReport.dead,
+    titles: beforeRestoreReport.titles,
     rects: sized,
-    activeIsBigger:
-      sized.length > 1 && activeId
-        ? (() => {
-            const a = sized.find((s) => s.id === activeId);
-            if (!a) return null; // probe opened a tile after this was measured
-            const others = sized.filter((s) => s.id !== activeId);
-            return others.every((o) => a.w * a.h >= o.w * o.h);
-          })()
-        : null,
+    activeIsBigger: reportActiveIsBigger,
   };
 };
 
 // --- boot ---------------------------------------------------------------
 
 (async () => {
+  const workspace = loadWorkspace();
   const status = await window.claufy.ptyAvailable();
   ptyOk = status.ok;
   ptyErr = status.error;
   layout();
   if (!ptyOk) toast('Terminals unavailable — run npm run rebuild');
-  else await addTerminal();
+  if (workspace) await restoreWorkspace(workspace);
+  else if (ptyOk) await addTerminal();
 })();

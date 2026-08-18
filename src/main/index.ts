@@ -367,6 +367,7 @@ async function checkMenu() {
 function createWindow() {
   const iconPng = path.join(__dirname, '..', 'assets', 'icon.png');
   const icon = fs.existsSync(iconPng) ? nativeImage.createFromPath(iconPng) : undefined;
+  const smoke = Boolean(process.env.CLAUFY_SMOKE);
 
   win = new BrowserWindow({
     width: 1440,
@@ -384,6 +385,9 @@ function createWindow() {
       nodeIntegration: false,
       // webview hosts the "page" tiles. Without this the tag is inert.
       webviewTag: true,
+      // A non-persistent partition makes the self-test unable to read or alter
+      // the user's real settings and saved workspace.
+      ...(smoke ? { partition: `claufy-smoke-${process.pid}` } : {}),
     },
   });
 
@@ -401,7 +405,7 @@ function createWindow() {
   // CLAUFY_SMOKE=1 boots the app, exercises the real layout code, prints a
   // report and exits. Lets the whole stack be checked without a human at the
   // screen, and fails loudly if the renderer throws on startup.
-  if (process.env.CLAUFY_SMOKE) {
+  if (smoke) {
     const errors: string[] = [];
     win.webContents.on('console-message', (_e, level, message) => {
       if (level >= 2) errors.push(message);
@@ -473,7 +477,10 @@ ipcMain.handle(
     if (!ptyModule) return { ok: false, error: ptyLoadError ?? 'node-pty unavailable' };
     if (ptys.has(id)) return { ok: true };
 
-    const dir = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
+    let dir = os.homedir();
+    if (cwd) {
+      try { if (fs.statSync(cwd).isDirectory()) dir = cwd; } catch { /* stale saved cwd */ }
+    }
     const shellPath = defaultShell();
     // A login shell so the user's aliases and PATH are present, matching what
     // they would get from a real terminal window.
@@ -512,7 +519,7 @@ ipcMain.handle(
           try { p.write(command + '\r'); } catch { /* pane closed */ }
         }, 350);
       }
-      return { ok: true, pid: p.pid };
+      return { ok: true, pid: p.pid, cwd: dir };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

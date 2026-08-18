@@ -22,6 +22,8 @@ construction.
 - Page tiles via `<webview>`.
 - Cat icon, drawn as SVG, rasterised by `npm run icons`.
 - `CLAUFY_SMOKE=1` self-test that drives the real functions and prints JSON.
+- Versioned workspace persistence: tile order, terminal folders, page URLs,
+  active tile and the tile occupying the Stage slot survive relaunches.
 
 - Terminal parity: copy, paste, select all, clear, a native right-click menu,
   clickable URLs, drag-a-file-to-type-its-path, middle-click paste, text size,
@@ -180,13 +182,20 @@ bring the window forward. It is now raced against a 250ms timer. It surfaced as
 a smoke test that hung at the step which opens terminals, about half the time,
 depending on whether the window was frontmost.
 
+**The workspace record is separate from settings, and the smoke profile is
+separate from both.** Focus mode, Grow ratio and text size keep their existing
+`claufy:settings` record. The open tile list lives in its own versioned,
+validated record so an old or malformed workspace can fall back to first-run
+behavior without disturbing those settings. `CLAUFY_SMOKE` runs in a temporary
+in-memory Electron partition; its real serialization and restoration checks
+therefore cannot read or overwrite a person's workspace.
+
 ## Decided, not built
 
 - **Status-driven layout** — the tile that needs you gets the big one.
   `claude agents --json` reports `busy` / `idle` / needs-input, so the grid could
   be a queue rather than a grid. This is the strongest idea here and nothing
   else on the market does it.
-- **Save and restore a workspace** — which folders were open, in what order.
 - **Split a tile** rather than only adding to the grid.
 - **Packaging** — electron-builder for `.dmg` / `.exe`. Runs from source today.
 - **Drag to reorder tiles.**
@@ -194,8 +203,7 @@ depending on whether the window was frontmost.
 ## Order of work
 
 1. Status-driven layout (needs the workspace concept below to be worth it).
-2. Save/restore workspaces — without it you re-open everything each launch.
-3. Packaging, once the above two settle the UI.
+2. Packaging, once status-driven layout settles the UI.
 
 ## Open questions
 
