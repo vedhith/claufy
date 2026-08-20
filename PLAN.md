@@ -214,3 +214,11 @@ therefore cannot read or overwrite a person's workspace.
   is Grow-only and idle in Stage, so it is sitting right there.
 - Should a rail tile be draggable to a different rail slot? The slot model would
   take it; nothing else would have to change.
+
+## Design phase (at end — global pipeline 2026-08-20, design/PIPELINE.md)
+- Runs AFTER the build is complete; until then the site stays a 3-colour text skeleton.
+- 5 elaborate theme concepts → pick → 3 refinements → pick → apply. 3 colours max, no AI-look defaults.
+- Feedback layer: visual ack <50 ms + subtle haptics where supported (never heavy).
+- Gates: vision critic → pairwise judge → AI device-matrix simulation (PC/laptop/tablet/phone)
+  → his devices; findings become GLOBAL library fixes, not local patches.
+- Perf: click ack <50 ms, perceived load ≤100 ms, Lighthouse ≥95, INP p75 <100 ms.
