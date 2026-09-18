@@ -71,7 +71,7 @@ a page tile pushed onto a rail (a <webview> eats clicks before the app sees them
   topmostIsTheClickSheet true   <- so clicking the page promotes it
   middleHasNoSheet true         <- and a page in the middle stays interactive
 scope probe inside a tile on "git pop":
-  DIR=/Users/vedhith/Developer/git pop
+  DIR=/Users/vedhith/Developer/Apps/git pop
   WRAPPED=2               <- claude agents is wrapped with --cwd
   ISFUNC=claude: function
 ```
