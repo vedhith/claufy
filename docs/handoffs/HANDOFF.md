@@ -196,7 +196,7 @@ machine that downloaded it through a browser.
 
 ### The repo moved accounts (2026-08-09)
 
-It was created on **`kk-vp`**, which is reserved for visionAnchor. `gh repo
+It was created on **`kk-vp`**, which is reserved for another project. `gh repo
 create` uses whatever account is *active* and kk-vp is the default, so nothing
 in the command revealed the wrong owner.
 
@@ -211,7 +211,7 @@ returns 404 — but it still exists. Deleting it needs the `delete_repo` scope,
 which requires an interactive `gh auth refresh`. See "Still open".
 
 A `PreToolUse` hook (`~/.claude/hooks/github-account-guard.py`) now blocks any
-create/push aimed at kk-vp from a non-visionAnchor project.
+create/push aimed at kk-vp from any project it isn't reserved for.
 
 **Still open:**
 

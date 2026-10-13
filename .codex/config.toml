@@ -1,0 +1,21 @@
+sandbox_mode = "workspace-write"
+
+[shell_environment_policy.set]
+AIDLC_RULES_DIR = "aidlc/spaces/default/memory"
+AIDLC_HARNESS_DIR = ".codex"
+AIDLC_HARNESS_NAME = "codex"
+
+[sandbox_workspace_write]
+network_access = true
+
+[agents]
+max_depth = 1
+
+[tools.experimental_request_user_input]
+enabled = true
+
+[features]
+default_mode_request_user_input = true
+
+[tui]
+status_line = ["model-with-reasoning", "git-branch", "task-progress", "context-used"]
